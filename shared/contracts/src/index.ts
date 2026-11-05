@@ -5,6 +5,9 @@
 // feature (static directory, no backend endpoint) and remain in the frontend.
 import { z } from "zod";
 
+// Authentication & authorization contracts (Phase 2).
+export * from "./auth";
+
 export const ModuleLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
 export type ModuleLevel = z.infer<typeof ModuleLevelSchema>;
 
