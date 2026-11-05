@@ -1,0 +1,41 @@
+# DevPulse — PostgreSQL (development) managed from the repository root.
+#
+# Usage (repo root):
+#   docker compose --env-file .env.docker up -d
+#   docker inspect --format "{{.State.Health.Status}}" devpulse-db
+#
+# Credentials come from .env.docker (Git-ignored). DATABASE_URL for backend/
+# Prisma lives in backend/.env instead — keep values in sync.
+#
+# Preserved state (backend separation, no data migration performed):
+# - The volume is the ORIGINAL Phase 1 volume `frontend_devpulse_pgdata`,
+#   pinned by explicit name so a project-name change cannot create a new one.
+# - Host port 5433 is still in use (container 5432). Host 5432 remains
+#   reserved by the Windows service postgresql-x64-18 (untouched).
+
+name: devpulse
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: devpulse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - devpulse_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  devpulse_pgdata:
+    # ATTENTION: pins the pre-existing Phase 1 volume. Do not delete.
+    name: frontend_devpulse_pgdata
