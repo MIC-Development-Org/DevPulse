@@ -120,9 +120,6 @@ DevPulse/
 ├── docs/
 │   └── api-contracts.md         # Typed REST API contracts for M1 (Backend) & M3 (Quiz)
 ├── public/                      # Static brand assets and favicons
-├── scripts/
-│   ├── capture-in-process.mjs   # In-process Next.js + Playwright screenshot engine
-│   └── capture-visuals.mjs      # Multi-viewport visual verification suite
 ├── src/
 │   ├── app/
 │   │   ├── api/                 # Typed API routes (/tracks, /certificates, /quiz/submit)
