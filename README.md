@@ -104,7 +104,25 @@ Each module follows a consistent structure: learning goals, core concept, an int
 - **Validation:** Zod schemas define the domain model and enforce typed boundaries between data and UI.
 - **State:** Server components for data retrieval, client components isolated to interactive surfaces.
 - **Data:** Currently seeded from local mock data with a swappable client adapter, ready to be pointed at a live backend without UI changes.
-- **Design system:** Documented in [DESIGN.md](DESIGN.md) with a full token map, motion budget (spring physics, 60 fps target, zero cumulative layout shift), and `prefers-reduced-motion` compliance.
+- **Design system:** Documented in [frontend/DESIGN.md](frontend/DESIGN.md) with a full token map, motion budget (spring physics, 60 fps target, zero cumulative layout shift), and `prefers-reduced-motion` compliance.
+
+The system separates presentation, transport, and evaluation into distinct layers:
+
+```mermaid
+flowchart LR
+    UI["Next.js App Router UI<br/>React 18 Server and Client Components"]
+    CLIENT["Typed ApiClient Adapter<br/>src/lib/api/api-client.ts"]
+    ROUTES["Next.js API Routes<br/>tracks, quizzes, certificates, profile"]
+    MOCK["Seeded Mock Data<br/>NEXT_PUBLIC_API_MOCK=true"]
+    LIVE["Live Backend<br/>NEXT_PUBLIC_API_MOCK=false"]
+
+    UI -->|"fetch and submit"| CLIENT
+    CLIENT --> ROUTES
+    ROUTES --> MOCK
+    ROUTES --> LIVE
+```
+
+Quiz answers never leave the server: the client receives sanitized questions, submissions are evaluated in `src/app/api/quiz/submit`, and only the scored result with a topic breakdown is returned.
 
 An interactive gallery of all design-system components is available in-app at `/storybook` and linked from the site footer.
 
@@ -113,56 +131,59 @@ An interactive gallery of all design-system components is available in-app at `/
 ## Project Structure
 
 ```
-frontend/
-├── docs/
-│   └── api-contracts.md          # Typed REST API contracts
-├── src/
-│   ├── app/
-│   │   ├── api/                  # API routes: tracks, quiz submission, certificates, profile
-│   │   ├── certificates/         # Filterable free certification directory
-│   │   ├── dashboard/            # Student progress and activity views
-│   │   ├── learn/                # Curriculum overview and module reader/quiz pages
-│   │   ├── login/                # Sign-in interface
-│   │   ├── profile/              # Student achievements and progress transcript
-│   │   ├── signup/               # Account registration
-│   │   ├── storybook/            # In-app design system component gallery
-│   │   ├── error.tsx             # Runtime error boundary
-│   │   ├── layout.tsx            # Global application shell
-│   │   ├── not-found.tsx         # 404 page
-│   │   └── page.tsx              # Landing page
-│   ├── components/
-│   │   ├── brand/                # Logo and brand assets
-│   │   ├── gamification/         # Achievement and toast components
-│   │   ├── global/               # Command palette, shortcuts modal, scroll progress
-│   │   ├── interactive/          # Git DAG visualizer
-│   │   ├── landing/              # Landing page visuals
-│   │   ├── layout/               # Navbar, footer, theme system
-│   │   ├── quiz/                 # Quiz player and results view
-│   │   ├── reader/               # Reader components: TOC, code blocks, callouts, notes
-│   │   ├── trail/                # Learning trail visualization
-│   │   └── ui/                   # Primitive components: button, card, badge, dialog, tabs, toast
-│   ├── lib/
-│   │   ├── api/                  # Typed client adapter (mock and live HTTP)
-│   │   ├── contracts/            # Zod schemas for all domain entities
-│   │   ├── data/                 # Seed data for tracks, modules, quizzes, certificates
-│   │   ├── gamification/         # XP and level logic
-│   │   ├── shortcut.tsx          # Keyboard shortcut utilities
-│   │   └── utils.ts              # Tailwind class merging utilities
-│   └── styles/
-│       └── globals.css           # Semantic CSS variables and global styles
-├── tests/
-│   ├── e2e/                      # Playwright end-to-end tests
-│   └── unit/                     # Vitest unit tests
-├── .env.example                  # Environment variable template
-├── next.config.mjs               # Next.js configuration
-├── tailwind.config.ts            # Tailwind and design token configuration
-├── tsconfig.json                 # TypeScript configuration (strict)
-├── postcss.config.mjs            # PostCSS pipeline
-├── playwright.config.ts          # End-to-end test configuration
-├── vitest.config.ts              # Unit test configuration
-├── package.json                  # Project manifest and scripts
+DevPulse/
+├── frontend/                     # Application root (all npm commands run here)
+│   ├── docs/
+│   │   └── api-contracts.md      # Typed REST API contracts
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── api/              # API routes: tracks, quiz submission, certificates, profile
+│   │   │   ├── certificates/     # Filterable free certification directory
+│   │   │   ├── dashboard/        # Student progress and activity views
+│   │   │   ├── learn/            # Curriculum overview and module reader/quiz pages
+│   │   │   ├── login/            # Sign-in interface
+│   │   │   ├── profile/          # Student achievements and progress transcript
+│   │   │   ├── signup/           # Account registration
+│   │   │   ├── storybook/        # In-app design system component gallery
+│   │   │   ├── error.tsx         # Runtime error boundary
+│   │   │   ├── layout.tsx        # Global application shell
+│   │   │   ├── not-found.tsx     # 404 page
+│   │   │   └── page.tsx          # Landing page
+│   │   ├── components/
+│   │   │   ├── brand/            # Logo and brand assets
+│   │   │   ├── gamification/     # Achievement and toast components
+│   │   │   ├── global/           # Command palette, shortcuts modal, scroll progress
+│   │   │   ├── interactive/      # Git DAG visualizer
+│   │   │   ├── landing/          # Landing page visuals
+│   │   │   ├── layout/           # Navbar, footer, theme system
+│   │   │   ├── quiz/             # Quiz player and results view
+│   │   │   ├── reader/           # Reader components: TOC, code blocks, callouts, notes
+│   │   │   ├── trail/            # Learning trail visualization
+│   │   │   └── ui/               # Primitive components: button, card, badge, dialog, tabs, toast
+│   │   ├── lib/
+│   │   │   ├── api/              # Typed client adapter (mock and live HTTP)
+│   │   │   ├── contracts/        # Zod schemas for all domain entities
+│   │   │   ├── data/             # Seed data for tracks, modules, quizzes, certificates
+│   │   │   ├── gamification/     # XP and level logic
+│   │   │   ├── shortcut.tsx      # Keyboard shortcut utilities
+│   │   │   └── utils.ts          # Tailwind class merging utilities
+│   │   └── styles/
+│   │       └── globals.css       # Semantic CSS variables and global styles
+│   ├── tests/
+│   │   ├── e2e/                  # Playwright end-to-end tests
+│   │   └── unit/                 # Vitest unit tests
+│   ├── .env.example              # Environment variable template
+│   ├── DESIGN.md                 # Design system reference
+│   ├── next.config.mjs           # Next.js configuration
+│   ├── tailwind.config.ts        # Tailwind and design token configuration
+│   ├── tsconfig.json             # TypeScript configuration (strict)
+│   ├── postcss.config.mjs        # PostCSS pipeline
+│   ├── playwright.config.ts      # End-to-end test configuration
+│   ├── vitest.config.ts          # Unit test configuration
+│   ├── package.json              # Project manifest and scripts
+│   └── package-lock.json         # Dependency lockfile
+├── .gitignore                    # Repository-wide ignore rules
 ├── CONTRIBUTING.md               # Engineering guidelines
-├── DESIGN.md                     # Design system reference
 ├── LICENSE                       # MIT license
 └── README.md                     # This document
 ```
@@ -171,9 +192,9 @@ frontend/
 
 ## Data Layer and API Contracts
 
-All domain entities are validated by Zod schemas in [`src/lib/contracts/index.ts`](src/lib/contracts/index.ts), covering tracks, module metadata, source citations, embedded video, quiz questions and results, certificates, user profiles, and badges.
+All domain entities are validated by Zod schemas in [`frontend/src/lib/contracts/index.ts`](frontend/src/lib/contracts/index.ts), covering tracks, module metadata, source citations, embedded video, quiz questions and results, certificates, user profiles, and badges.
 
-UI surfaces consume data exclusively through the [`ApiClient`](src/lib/api/api-client.ts) interface:
+UI surfaces consume data exclusively through the [`ApiClient`](frontend/src/lib/api/api-client.ts) interface:
 
 ```typescript
 import { api } from "@/lib/api/api-client";
@@ -182,7 +203,7 @@ const tracks = await api.getTracks();
 const result = await api.submitQuiz({ moduleId, answers });
 ```
 
-Because the adapter is swappable, the application currently runs against seeded mock data (`NEXT_PUBLIC_API_MOCK=true`) and can be switched to a live HTTP backend by configuration alone. Full endpoint specifications, payloads, and status codes are documented in [docs/api-contracts.md](docs/api-contracts.md).
+Because the adapter is swappable, the application currently runs against seeded mock data (`NEXT_PUBLIC_API_MOCK=true`) and can be switched to a live HTTP backend by configuration alone. Full endpoint specifications, payloads, and status codes are documented in [frontend/docs/api-contracts.md](frontend/docs/api-contracts.md).
 
 ### Environment Variables
 
