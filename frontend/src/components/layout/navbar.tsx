@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { Logo } from "../brand/logo";
 import { ThemeToggle } from "./theme-toggle";
 import {
@@ -16,6 +17,7 @@ import {
   Award,
   LayoutDashboard,
   User,
+  LogOut,
   ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,8 @@ interface NavbarProps {
 export function Navbar({ onOpenSearch, onOpenShortcuts }: NavbarProps) {
   const pathname = usePathname();
   const modKey = useModKey();
+  const { data: session } = useSession();
+  const user = session?.user ?? null;
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [xpState, setXpState] = React.useState<XPState | null>(null);
   const [prevXP, setPrevXP] = React.useState(0);
@@ -186,18 +190,41 @@ export function Navbar({ onOpenSearch, onOpenShortcuts }: NavbarProps) {
 
           <ThemeToggle />
 
-          {/* Profile Avatar */}
+          {/* Sign out (authenticated users only) */}
+          {user && (
+            <button
+              onClick={() => void signOut({ callbackUrl: "/" })}
+              aria-label="Sign out"
+              title="Sign out"
+              className="hidden sm:flex items-center justify-center w-9 h-9 rounded-lg border border-border text-foreground/60 hover:text-foreground hover:bg-slate-100 dark:hover:bg-card-subtle transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Profile Avatar — session-aware: real user identity, or a neutral
+              placeholder when signed out (replaces the hardcoded mock avatar) */}
           <Link
             href="/profile"
-            aria-label="User Profile"
+            aria-label={user ? `Signed in as ${user.name ?? user.email ?? "user"}` : "User Profile"}
             className="relative flex items-center justify-center w-9 h-9 rounded-full ring-2 ring-border hover:ring-mint transition-all duration-200 overflow-hidden group"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80"
-              alt="Alex Rivera"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-            />
+            {user?.image ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={user.image}
+                alt={user.name ?? "Profile"}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              />
+            ) : user?.name || user?.email ? (
+              <span className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-ink-900 font-display text-xs font-bold text-foreground/70 group-hover:scale-105 transition-transform duration-200">
+                {(user.name ?? user.email ?? "?").charAt(0).toUpperCase()}
+              </span>
+            ) : (
+              <span className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-ink-900 text-foreground/60">
+                <User className="w-4 h-4" />
+              </span>
+            )}
           </Link>
 
           {/* Mobile Hamburger */}
@@ -260,6 +287,22 @@ export function Navbar({ onOpenSearch, onOpenShortcuts }: NavbarProps) {
             >
               <User className="w-4 h-4" /> Profile & Settings
             </Link>
+            {user ? (
+              <button
+                onClick={() => { setMobileMenuOpen(false); void signOut({ callbackUrl: "/" }); }}
+                className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground px-3 py-2 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" /> Sign out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2 text-sm text-mint font-semibold px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-card-subtle transition-colors"
+              >
+                Sign in
+              </Link>
+            )}
             <button
               onClick={() => { setMobileMenuOpen(false); onOpenShortcuts?.(); }}
               className="text-xs text-foreground/50 hover:text-foreground font-mono px-3 py-2 rounded-lg transition-colors"

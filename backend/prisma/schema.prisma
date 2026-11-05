@@ -20,8 +20,17 @@ datasource db {
 
 // ---------------------------------------------------------------------------
 // Auth.js adapter models — required field names and relations. Do not rename.
-// Authentication flows themselves are Phase 2.
+// Phase 2 note: adopted now. `passwordHash` and `role` below are app-owned
+// extensions that coexist with the adapter's pristine field set; the adapter
+// ignores unknown columns.
 // ---------------------------------------------------------------------------
+
+/// Authorization foundation (Phase 2). USER = self-service learner access;
+/// ADMIN reserved for future moderation/admin APIs.
+enum Role {
+  USER
+  ADMIN
+}
 
 model User {
   id            String    @id @default(uuid())
@@ -32,6 +41,13 @@ model User {
   username      String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  // --- Auth.js credentials provider extension (Phase 2) --------------------
+  // Argon2id encoded hash ("$argon2id$v=19$m=..."). Nullable because
+  // OAuth/provider users authenticate without a local password. Never
+  // selected into API responses; repository/service layers own it.
+  passwordHash String? @db.Text
+  role         Role    @default(USER)
 
   accounts       Account[]
   sessions       Session[]
