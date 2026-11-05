@@ -1,0 +1,186 @@
+// DevPulse — Prisma schema (Phase 1: PostgreSQL database foundation)
+//
+// Auth.js models (User, Account, Session, VerificationToken) follow the
+// official @auth/prisma-adapter schema exactly, so Auth.js (Phase 2) can be
+// adopted later without a schema migration of those records:
+// https://authjs.dev/getting-started/adapters/prisma
+//
+// Domain models (Track, Module, QuizAttempt, UserModuleProgress, ModuleNote)
+// are seeded/state models for M1 + M3. Curriculum content (lesson bodies,
+// quiz banks, certificates) intentionally remains in src/lib/data/mock-data.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js adapter models — required field names and relations. Do not rename.
+// Authentication flows themselves are Phase 2.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  username      String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  quizAttempts   QuizAttempt[]
+  moduleProgress UserModuleProgress[]
+  notes          ModuleNote[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// DevPulse domain models (M1: tracks/modules, M3: quiz + progress)
+// ---------------------------------------------------------------------------
+
+enum ProgressStatus {
+  LOCKED
+  UNLOCKED
+  COMPLETED
+}
+
+/// Editorial curriculum container. "id" is the stable editorial id from
+/// src/lib/data/mock-data.ts (e.g. "track-0"), preserved so seeds are
+/// idempotent and references stay stable across re-runs.
+model Track {
+  id        String   @id
+  slug      String   @unique
+  title     String
+  position  Int // ordering across tracks (equals trackNumber, 0-based)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  modules Module[]
+}
+
+/// Curriculum module metadata. "id" is the stable editorial id from
+/// src/lib/data/mock-data.ts (e.g. "mod-0-5"). Quiz banks and lesson content
+/// stay in code; this table is the persistence anchor for progress,
+/// attempts and unlock logic.
+model Module {
+  id            String   @id
+  trackId       String
+  slug          String
+  position      Int // 1-based ordering within the track (equals module.order)
+  passThreshold Int      @default(80)
+  questionCount Int      @default(8)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  track        Track                @relation(fields: [trackId], references: [id])
+  quizAttempts QuizAttempt[]
+  progress     UserModuleProgress[]
+  notes        ModuleNote[]
+
+  @@unique([trackId, slug])
+  @@unique([trackId, position])
+  @@index([slug])
+}
+
+/// Immutable record of one graded quiz submission (M3). One row per attempt;
+/// best score per (user, module) is derived from these rows and cached on
+/// UserModuleProgress.bestScore.
+model QuizAttempt {
+  id         String   @id @default(uuid())
+  userId     String
+  moduleId   String
+  score      Int
+  total      Int
+  percentage Float
+  passed     Boolean
+  answers    Json // { questionId: selectedOptionIndex }
+  breakdown  Json? // { topicBreakdown: [...], missedTopics: [...] }
+  createdAt  DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id])
+
+  @@index([userId, moduleId, createdAt])
+}
+
+/// Server-authoritative unlock state per (user, module). The "next module
+/// unlocks when previous quiz is passed" rule lives in a later phase; this
+/// table is its persistent backing store.
+model UserModuleProgress {
+  userId      String
+  moduleId    String
+  status      ProgressStatus @default(LOCKED)
+  bestScore   Float? // highest achieved percentage, denormalized from attempts
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id])
+
+  @@id([userId, moduleId])
+  @@index([moduleId])
+}
+
+/// Per-user study notes in the module reader (replaces localStorage in a
+/// later phase; added now since the schema shape is unambiguous).
+model ModuleNote {
+  userId    String
+  moduleId  String
+  body      String   @default("") @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id])
+
+  @@id([userId, moduleId])
+  @@index([moduleId])
+}

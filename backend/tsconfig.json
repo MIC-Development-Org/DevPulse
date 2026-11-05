@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@devpulse/contracts": ["../shared/contracts/src/index.ts"],
+      "@devpulse/curriculum": ["../shared/curriculum/src/tracks.ts"]
+    }
+  },
+  "include": ["src", "prisma/*.ts"],
+  "exclude": ["node_modules"]
+}
