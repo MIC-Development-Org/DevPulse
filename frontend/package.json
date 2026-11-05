@@ -1,5 +1,5 @@
 {
-  "name": "devpulse",
+  "name": "@devpulse/frontend",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -12,6 +12,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@devpulse/contracts": "*",
+    "@devpulse/curriculum": "*",
     "canvas-confetti": "^1.9.3",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
