@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import { SessionProvider } from "next-auth/react";
 import { Navbar } from "./navbar";
 import { Footer } from "./footer";
 import { CommandPalette } from "../global/command-palette";
@@ -15,7 +16,9 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   const [shortcutsModalOpen, setShortcutsModalOpen] = React.useState<boolean>(false);
 
   return (
-    <>
+    // SessionProvider (Phase 2): exposes Auth.js session state to the navbar
+    // and other client components via useSession.
+    <SessionProvider>
       <ScrollProgress />
       <Navbar
         onOpenSearch={() => setCommandPaletteOpen(true)}
@@ -36,7 +39,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         onOpenChange={setShortcutsModalOpen}
       />
       <BackToTop />
-    </>
+    </SessionProvider>
   );
 }
 
