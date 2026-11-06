@@ -117,7 +117,14 @@ flags; none of them may appear in real deployments:
 4. Auth: `AUTH_SECRET` strong random; `AUTH_URL` matching the public origin;
    no `AUTH_TRUST_HOST`/`AUTHJS_SESSION_COOKIE_INSECURE` unless the origin
    is one you control end-to-end.
-5. Mock-bin visibility: with mock off, no "MOCK DATA" pill renders.
-   In hybrid mode one soft "PARTIAL MOCK · USER DATA" pill
-   (`MockDataBanner`) stays visible until Phase 5 retires the mocked
-   user-scoped flows.
+5. Mock-bin visibility: with mock off, no "MOCK DATA" pill renders. Since
+   Phase 5 the hybrid mode is fully live — the `MockDataBanner` shows the
+   green "Live API · real progress" chip (user profiles, progress start,
+   server-side grading, attempt history and reset are all real). The amber
+   "Mock data" chip appears only in flag-driven mock builds used for
+   UI-only development.
+6. Production verification (Phase 5, decision D6): run
+   `npm run verify:production` in the frontend workspace — a production
+   build followed by `scripts/check-production-bundle.mjs`, which fails if
+   quiz answer keys (`correctOptionIndex`, bank question ids) or the mock
+   grading markers reach `.next/static` chunks.
