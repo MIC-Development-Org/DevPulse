@@ -1,38 +1,39 @@
 import { z } from "zod";
 import type {
   Track,
-  ModuleMeta,
-  QuizQuestion,
+  ModuleDetail,
+  PublicQuizQuestion,
   QuizSubmission,
   QuizResult,
   CertificateResource,
   UserProfile,
 } from "../contracts";
 import {
+  ModuleDetailSchema,
+  PublicQuizQuestionSchema,
+  TrackListSchema,
   TrackSchema,
-  ModuleMetaSchema,
-  QuizQuestionSchema,
   QuizSubmissionSchema,
   QuizResultSchema,
   UserProfileSchema,
 } from "@devpulse/contracts";
 import { CERTIFICATES } from "../data/mock-data";
 import type { ApiClient } from "./api-client";
+import { ApiError } from "./errors";
 import { httpFetch } from "./http-client";
 
 /**
  * HTTP adapter implementing the ApiClient interface against same-origin BFF
- * endpoints. Responses are validated with the shared contracts so frontend
- * and backend can never drift on payload shapes.
+ * endpoints (Phase 4: the real DB-backed Express serves these paths via the
+ * BFF proxies in app/api/business/*).
  *
- * Phase 3 boundary: these endpoint paths are the Phase-4 BFF contract, but
- * the handlers/backend endpoints will only start serving them in Phase 4
- * (business APIs excluded from Phase 3 by design). The mock adapter stays
- * selected for the app until those flows ship — see adapter.ts.
+ * Responses are validated with the shared contracts so frontend and backend
+ * can never drift on payload shapes. Unknown resources (backend 404) surface
+ * as `null`, exactly like the mock adapter; every other failure propagates —
+ * browser code NEVER falls back to mock data on a failed real request.
  *
  * Certificates are intentionally NOT an HTTP call: they are a frontend-
- * curated static resource by architecture decision (no backend endpoint),
- * so this adapter delegates to the shared static set.
+ * curated static resource by architecture decision (no backend endpoint).
  */
 
 const TRACKS_PATH = "/api/business/tracks";
@@ -40,8 +41,8 @@ const TRACK_PATH = (slug: string) => `/api/business/tracks/${encodeURIComponent(
 const MODULE_PATH = (trackSlug: string, moduleSlug: string) =>
   `/api/business/tracks/${encodeURIComponent(trackSlug)}/modules/${encodeURIComponent(moduleSlug)}`;
 const PROFILE_PATH = "/api/business/me/profile";
-const QUIZ_QUESTIONS_PATH = (moduleId: string) =>
-  `/api/business/modules/${encodeURIComponent(moduleId)}/quiz/questions`;
+const QUIZ_QUESTIONS_PATH = (trackSlug: string, moduleSlug: string) =>
+  `/api/business/tracks/${encodeURIComponent(trackSlug)}/modules/${encodeURIComponent(moduleSlug)}/quiz`;
 const QUIZ_SUBMIT_PATH = "/api/business/quiz/submissions";
 const PROGRESS_RESET_PATH = "/api/business/me/progress/reset";
 
@@ -53,24 +54,38 @@ function assertSlug(value: string, label: string): string {
   return value;
 }
 
+/**
+ * Unknown resources (backend 404) surface as `null`, mirroring the mock
+ * adapter's shape. Every other failure propagates to the caller — no
+ * silent fallbacks (Phase 4 requirement).
+ */
+async function fetchNullable<T>(
+  path: string,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>
+): Promise<T | null> {
+  try {
+    return await httpFetch<T>(path, { schema });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export class HttpApiClient implements ApiClient {
   async getTracks(): Promise<Track[]> {
-    return httpFetch(TRACKS_PATH, {
-      schema: z.array(TrackSchema),
-    });
+    return httpFetch(TRACKS_PATH, { schema: TrackListSchema });
   }
 
   async getTrackBySlug(slug: string): Promise<Track | null> {
-    const track = await httpFetch<Track | null>(TRACK_PATH(assertSlug(slug, "track slug")), {
-      schema: TrackSchema.nullable(),
-    });
-    return track;
+    return fetchNullable(TRACK_PATH(assertSlug(slug, "track slug")), TrackSchema);
   }
 
-  async getModuleBySlug(trackSlug: string, moduleSlug: string): Promise<ModuleMeta | null> {
-    return httpFetch<ModuleMeta | null>(
+  async getModuleBySlug(trackSlug: string, moduleSlug: string): Promise<ModuleDetail | null> {
+    return fetchNullable(
       MODULE_PATH(assertSlug(trackSlug, "track slug"), assertSlug(moduleSlug, "module slug")),
-      { schema: ModuleMetaSchema.nullable() }
+      ModuleDetailSchema
     );
   }
 
@@ -90,12 +105,19 @@ export class HttpApiClient implements ApiClient {
     return profile;
   }
 
-  async getQuizQuestions(moduleId: string): Promise<Omit<QuizQuestion, "correctOptionIndex">[]> {
-    // The answer key is never serialized to the client: the contract omits it.
-    const schema = QuizQuestionSchema.omit({ correctOptionIndex: true });
-    return httpFetch(QUIZ_QUESTIONS_PATH(assertSlug(moduleId, "module id")), {
-      schema: z.array(schema),
-    });
+  async getQuizQuestions(
+    trackSlug: string,
+    moduleSlug: string
+  ): Promise<PublicQuizQuestion[]> {
+    // PublicQuizQuestionSchema omits correctOptionIndex AND explanation at
+    // contract level — grading truth can never reach the browser payload.
+    return httpFetch(
+      QUIZ_QUESTIONS_PATH(
+        assertSlug(trackSlug, "track slug"),
+        assertSlug(moduleSlug, "module slug")
+      ),
+      { schema: z.array(PublicQuizQuestionSchema) }
+    );
   }
 
   async submitQuiz(submission: QuizSubmission): Promise<QuizResult> {

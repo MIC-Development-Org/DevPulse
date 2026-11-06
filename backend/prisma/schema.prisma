@@ -5,9 +5,11 @@
 // adopted later without a schema migration of those records:
 // https://authjs.dev/getting-started/adapters/prisma
 //
-// Domain models (Track, Module, QuizAttempt, UserModuleProgress, ModuleNote)
-// are seeded/state models for M1 + M3. Curriculum content (lesson bodies,
-// quiz banks, certificates) intentionally remains in src/lib/data/mock-data.ts.
+// Domain models (Track, Module, QuizAttempt, UserModuleProgress, ModuleNote,
+// QuizQuestion) are seeded/state models for M1 + M3. Lesson bodies and
+// certificates intentionally remain in src/lib/data/mock-data.ts. As of
+// Phase 4, quiz banks are authored in shared/curriculum (single source) and
+// persisted in the QuizQuestion table (server-only answer keys).
 
 generator client {
   provider = "prisma-client-js"
@@ -122,9 +124,9 @@ model Track {
 }
 
 /// Curriculum module metadata. "id" is the stable editorial id from
-/// src/lib/data/mock-data.ts (e.g. "mod-0-5"). Quiz banks and lesson content
-/// stay in code; this table is the persistence anchor for progress,
-/// attempts and unlock logic.
+/// shared/curriculum (e.g. "mod-0-5"). This table is the persistence anchor
+/// for progress, attempts and unlock logic; lesson bodies stay in code while
+/// quiz questions live in the QuizQuestion table (Phase 4).
 model Module {
   id            String   @id
   trackId       String
@@ -139,6 +141,7 @@ model Module {
   quizAttempts QuizAttempt[]
   progress     UserModuleProgress[]
   notes        ModuleNote[]
+  questions    QuizQuestion[]
 
   @@unique([trackId, slug])
   @@unique([trackId, position])
@@ -198,5 +201,30 @@ model ModuleNote {
   module Module @relation(fields: [moduleId], references: [id])
 
   @@id([userId, moduleId])
+  @@index([moduleId])
+}
+
+/// Persisted quiz bank rows (Phase 4). Seed upserts by the stable editorial
+/// question id (authored in shared/curriculum QUIZ_BANKS, e.g. "q-05-1"),
+/// so re-runs never duplicate or renumber rows. PUBLIC API RULE:
+/// correctOptionIndex and explanation are server-only secrets — public quiz
+/// responses must be composed through PublicQuizQuestionSchema
+/// (@devpulse/contracts), which omits both fields.
+model QuizQuestion {
+  id                 String   @id
+  moduleId           String
+  position           Int // 1-based ordering within the module's authored bank
+  topic              String
+  question           String   @db.Text
+  options            Json // JSON string[4]; index IS the option number (0-3)
+  correctOptionIndex Int // 0-3; never serialized into public quiz responses
+  explanation        String   @db.Text // teaching copy; public responses omit it
+  hint               String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, position])
   @@index([moduleId])
 }

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { createAuthRouter } from "./auth.routes";
+import { curriculumRoutes } from "./curriculum.routes";
 import { healthRoutes } from "./health.routes";
 
 /** compose options type here */
@@ -18,7 +19,10 @@ export function createRouter(options: RouterOptions = {}): Router {
   router.use("/health", healthRoutes);
   router.use(createAuthRouter(options.rateLimits));
 
-  // Future business routers (tracks/modules/quizzes) mount here, each behind
-  // requireAuth + requireRole as appropriate.
+  // Public read-only learning content (tracks/modules/quiz, Phase 4). The
+  // user-scoped business routers (progress, quiz submission, certificates)
+  // mount here in later phases behind requireAuth + requireRole.
+  router.use(curriculumRoutes);
+
   return router;
 }

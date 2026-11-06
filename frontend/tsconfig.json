@@ -21,7 +21,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@devpulse/contracts": ["../shared/contracts/src/index.ts"],
-      "@devpulse/curriculum": ["../shared/curriculum/src/tracks.ts"]
+      "@devpulse/curriculum": ["../shared/curriculum/src/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

@@ -26,6 +26,12 @@ export interface MockSelection {
   flag: string | undefined;
 }
 
+/**
+ * Adapter mode names (Phase 4). "hybrid" means the live DB-backed API serves
+ * tracks/modules/quiz while user-scoped flows remain mock (until Phase 5).
+ */
+export type ApiMode = "mock" | "hybrid";
+
 let cachedSelection: MockSelection | undefined;
 
 export function computeMockSelection(): MockSelection {
@@ -41,6 +47,11 @@ export function computeMockSelection(): MockSelection {
 /** Convenience view for UI surfaces (mock banner, tests). */
 export function isMockAdapterActive(): boolean {
   return computeMockSelection().active;
+}
+
+/** Fine-grained mode for honest UI disclosure (banner chips etc.). */
+export function getApiMode(): ApiMode {
+  return computeMockSelection().active ? "mock" : "hybrid";
 }
 
 /**

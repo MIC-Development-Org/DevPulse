@@ -36,12 +36,13 @@ export default defineConfig({
       // AUTH_TRUST_HOST=true opens v5's strict production host check for our
       // own trusted server; AUTHJS_SESSION_COOKIE_INSECURE=true drops the
       // __Secure- prefix so plain-http clients deterministically get the
-      // session cookie. NEXT_PUBLIC_API_MOCK=true keeps Phase-3 mock data; the
-      // e2e-only ALLOW_MOCK_IN_PRODUCTION=true is the single sanctioned escape
-      // that survives the adapter's hard production guard (adapter.ts).
-      // None of these is ever set in real deployments — see auth.ts,
-      // adapter.ts and docs/environments.md.
-      command: `set AUTH_TRUST_HOST=true&& set AUTHJS_SESSION_COOKIE_INSECURE=true&& set NEXT_PUBLIC_API_MOCK=true&& set ALLOW_MOCK_IN_PRODUCTION=true&& set AUTH_URL=http://localhost:${PORT}&& npm run build && npm run start -- -p ${PORT} -H localhost`,
+      // session cookie. NEXT_PUBLIC_API_MOCK=false selects the Phase 4 hybrid
+      // adapter: e2e flows exercise the REAL DB-backed Tracks & Modules API
+      // (plus the still-mocked user-scoped flows). ALLOW_MOCK_IN_PRODUCTION
+      // is no longer part of this topology — renting mock data in production
+      // builds is not sanctioned anymore. See auth.ts, adapter.ts and
+      // docs/environments.md.
+      command: `set AUTH_TRUST_HOST=true&& set AUTHJS_SESSION_COOKIE_INSECURE=true&& set NEXT_PUBLIC_API_MOCK=false&& set AUTH_URL=http://localhost:${PORT}&& npm run build && npm run start -- -p ${PORT} -H localhost`,
       url: BASE_URL,
       name: "frontend",
       reuseExistingServer: false,

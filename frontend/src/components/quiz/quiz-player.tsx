@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { QuizQuestion, QuizResult } from "@/lib/contracts";
+import { QuizResult, PublicQuizQuestion } from "@/lib/contracts";
 import { api } from "@/lib/api/api-client";
 import { SegmentedProgressBar } from "../ui/progress-bar";
 import { Button } from "../ui/button";
@@ -27,7 +27,9 @@ interface QuizPlayerProps {
   moduleTitle: string;
   trackSlug: string;
   moduleSlug: string;
-  questions: Omit<QuizQuestion, "correctOptionIndex">[];
+  // Browser-safe questions only: the public contract omits both
+  // correctOptionIndex AND explanation (Phase 4).
+  questions: PublicQuizQuestion[];
 }
 
 // Framer Motion variants
