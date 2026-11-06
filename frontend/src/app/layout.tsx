@@ -1,6 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "@/styles/globals.css";
+// Phase 3: hard production mock guard — module init fails build page-data
+// collection and every production server render when mock data would be
+// served without the sanctioned e2e escape (see lib/api/guard.server.ts,
+// docs/environments.md). Server-only; the browser is never responsible.
+import "@/lib/api/guard.server";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { ClientShell } from "@/components/layout/client-shell";

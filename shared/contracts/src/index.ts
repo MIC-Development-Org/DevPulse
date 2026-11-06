@@ -8,6 +8,9 @@ import { z } from "zod";
 // Authentication & authorization contracts (Phase 2).
 export * from "./auth";
 
+// HTTP communication contracts (Phase 3): shared error envelope + codes.
+export * from "./api";
+
 export const ModuleLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
 export type ModuleLevel = z.infer<typeof ModuleLevelSchema>;
 

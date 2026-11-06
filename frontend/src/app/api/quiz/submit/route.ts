@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { QuizSubmissionSchema } from "@/lib/contracts";
 import { api } from "@/lib/api/api-client";
+import {
+  businessRouteNotImplemented,
+  notImplementedResponse,
+} from "@/lib/api/not-implemented";
 
 export async function POST(request: Request) {
+  if (businessRouteNotImplemented()) return notImplementedResponse();
   try {
     const body = await request.json();
     const parsed = QuizSubmissionSchema.safeParse(body);
