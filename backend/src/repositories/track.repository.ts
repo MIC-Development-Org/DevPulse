@@ -27,6 +27,13 @@ export const trackRepository = {
       include: { modules: { orderBy: { position: "asc" } } },
     }),
 
+  /** Direct track lookup by editorial id (progress chain rule, Phase 5). */
+  findTrackById: async (trackId: string): Promise<TrackWithModules | null> =>
+    prisma.track.findUnique({
+      where: { id: trackId },
+      include: { modules: { orderBy: { position: "asc" } } },
+    }),
+
   /** Modules are only addressable through their track (404 on mismatch). */
   findModuleByTrackAndSlugs: async (
     trackSlug: string,
@@ -35,5 +42,22 @@ export const trackRepository = {
     prisma.module.findFirst({
       where: { slug: moduleSlug, track: { slug: trackSlug } },
       include: { track: true },
+    }),
+
+  /** Direct module lookup by editorial id (progress endpoints, Phase 5). */
+  findModuleById: async (moduleId: string): Promise<ModuleWithTrack | null> =>
+    prisma.module.findUnique({
+      where: { id: moduleId },
+      include: { track: true },
+    }),
+
+  /** First module strictly after `position` within the same track. */
+  findNextModuleInTrack: async (
+    trackId: string,
+    position: number
+  ): Promise<Module | null> =>
+    prisma.module.findFirst({
+      where: { trackId, position: { gt: position } },
+      orderBy: { position: "asc" },
     }),
 };

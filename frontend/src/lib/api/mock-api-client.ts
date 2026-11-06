@@ -9,14 +9,17 @@
   TopicBreakdown,
   MissedTopic,
   PublicQuizQuestion,
+  ModuleProgressEntry,
+  ProgressOverview,
+  QuizAttemptHistory,
 } from "../contracts";
 import {
   TRACKS,
-  QUIZ_BANKS,
   CERTIFICATES,
   MOCK_USER,
   QUIZ_CONFIG,
 } from "../data/mock-data";
+import { QUIZ_BANKS } from "@devpulse/curriculum";
 import type { ApiClient } from "./api-client";
 // In-browser mock adapter with LocalStorage persistence so progress and quiz scores stick across page reloads
 export class MockApiClient implements ApiClient {
@@ -65,11 +68,48 @@ export class MockApiClient implements ApiClient {
     return this.getStoredUser();
   }
 
-  async updateUserProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    const current = this.getStoredUser();
-    const updated = { ...current, ...updates };
-    this.saveStoredUser(updated);
-    return updated;
+  /**
+   * Mock-mode progress start: derives the entry from the stored mock user
+   * (the mock has no attempt store), mirroring the server's UNLOCKED/LOCKED
+   * /COMPLETED contract. Never marks a module completed and never invents a
+   * new status — opening merely "touches" the mock activity timestamp.
+   */
+  async startModule(moduleId: string): Promise<ModuleProgressEntry> {
+    const user = this.getStoredUser();
+    const completed = user.completedModuleIds.includes(moduleId);
+    const unlocked = completed || user.unlockedModuleIds.includes(moduleId);
+    return {
+      moduleId,
+      status: completed ? "COMPLETED" : unlocked ? "UNLOCKED" : "LOCKED",
+      bestScore: user.quizScores[moduleId] ?? null,
+      completedAt: null,
+      attemptCount: 0,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getProgressOverview(): Promise<ProgressOverview> {
+    const user = this.getStoredUser();
+    const completed = new Set(user.completedModuleIds);
+    const unlocked = new Set([...user.unlockedModuleIds]);
+    for (const id of completed) unlocked.add(id);
+
+    const entries: ModuleProgressEntry[] = TRACKS.flatMap((track) =>
+      track.modules.map((moduleMeta) => ({
+        moduleId: moduleMeta.id,
+        status: completed.has(moduleMeta.id)
+          ? ("COMPLETED" as const)
+          : unlocked.has(moduleMeta.id)
+            ? ("UNLOCKED" as const)
+            : ("LOCKED" as const),
+        bestScore: user.quizScores[moduleMeta.id] ?? null,
+        completedAt: null,
+        attemptCount: 0,
+        updatedAt: null,
+      }))
+    );
+
+    return { entries, generatedAt: new Date().toISOString() };
   }
 
   async resetProgress(): Promise<UserProfile> {
@@ -99,7 +139,10 @@ export class MockApiClient implements ApiClient {
   }
 
   async submitQuiz(submission: QuizSubmission): Promise<QuizResult> {
-    // SERVER-SIDE SCORING SIMULATION (owned by M3)
+    // SERVER-SIDE SCORING SIMULATION — mock mode ONLY. This whole module is
+    // excluded from production hybrid builds by build-time dead-code
+    // elimination (adapter.ts); the artifacts scanner fails the build if any
+    // of it (answer keys included) reaches the client bundle.
     let bank = QUIZ_BANKS[submission.moduleId];
     if (!bank || bank.length === 0) {
       bank = QUIZ_BANKS["mod-0-5"] || [];
@@ -210,6 +253,15 @@ export class MockApiClient implements ApiClient {
 
   async getCertificates(): Promise<CertificateResource[]> {
     return CERTIFICATES;
+  }
+
+  /**
+   * Mock-mode attempt history: the mock persists scores on the stored user
+   * but not per-attempt rows, so the history is genuinely empty (honest,
+   * not fabricated). Server mode returns real persisted attempts.
+   */
+  async getAttemptHistory(): Promise<QuizAttemptHistory> {
+    return [];
   }
 }
 

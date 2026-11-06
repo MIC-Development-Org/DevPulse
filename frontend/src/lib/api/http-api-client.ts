@@ -7,6 +7,9 @@ import type {
   QuizResult,
   CertificateResource,
   UserProfile,
+  ModuleProgressEntry,
+  ProgressOverview,
+  QuizAttemptHistory,
 } from "../contracts";
 import {
   ModuleDetailSchema,
@@ -16,7 +19,10 @@ import {
   QuizSubmissionSchema,
   QuizResultSchema,
   UserProfileSchema,
-} from "@devpulse/contracts";
+  ModuleProgressEntrySchema,
+  ProgressOverviewSchema,
+  QuizAttemptHistorySchema,
+} from "@devpulse/contracts/src/shared-schemas";
 import { CERTIFICATES } from "../data/mock-data";
 import type { ApiClient } from "./api-client";
 import { ApiError } from "./errors";
@@ -24,16 +30,18 @@ import { httpFetch } from "./http-client";
 
 /**
  * HTTP adapter implementing the ApiClient interface against same-origin BFF
- * endpoints (Phase 4: the real DB-backed Express serves these paths via the
- * BFF proxies in app/api/business/*).
+ * endpoints (Phase 4 content + Phase 5 user flows; the real DB-backed
+ * Express serves these paths via the BFF proxies in app/api/business/*).
  *
  * Responses are validated with the shared contracts so frontend and backend
  * can never drift on payload shapes. Unknown resources (backend 404) surface
  * as `null`, exactly like the mock adapter; every other failure propagates —
  * browser code NEVER falls back to mock data on a failed real request.
  *
- * Certificates are intentionally NOT an HTTP call: they are a frontend-
- * curated static resource by architecture decision (no backend endpoint).
+ * SECURITY (Phase 5): grading calls carry ONLY `{moduleId, answers}` —
+ * scores/pass/completion are server-computed values that never travel to the
+ * backend. Certificates remain a frontend-curated static resource (by design
+ * decision, no backend endpoint).
  */
 
 const TRACKS_PATH = "/api/business/tracks";
@@ -41,10 +49,14 @@ const TRACK_PATH = (slug: string) => `/api/business/tracks/${encodeURIComponent(
 const MODULE_PATH = (trackSlug: string, moduleSlug: string) =>
   `/api/business/tracks/${encodeURIComponent(trackSlug)}/modules/${encodeURIComponent(moduleSlug)}`;
 const PROFILE_PATH = "/api/business/me/profile";
+const PROGRESS_PATH = "/api/business/me/progress";
+const PROGRESS_START_PATH = (moduleId: string) =>
+  `/api/business/me/progress/${encodeURIComponent(moduleId)}/start`;
+const PROGRESS_RESET_PATH = "/api/business/me/progress/reset";
 const QUIZ_QUESTIONS_PATH = (trackSlug: string, moduleSlug: string) =>
   `/api/business/tracks/${encodeURIComponent(trackSlug)}/modules/${encodeURIComponent(moduleSlug)}/quiz`;
 const QUIZ_SUBMIT_PATH = "/api/business/quiz/submissions";
-const PROGRESS_RESET_PATH = "/api/business/me/progress/reset";
+const QUIZ_ATTEMPTS_PATH = "/api/business/me/quiz/attempts";
 
 /** URL/path-safe slug check so nothing odd reaches a route handler. */
 function assertSlug(value: string, label: string): string {
@@ -90,19 +102,18 @@ export class HttpApiClient implements ApiClient {
   }
 
   async getUserProfile(): Promise<UserProfile> {
-    const profile = await httpFetch(PROFILE_PATH, {
-      schema: UserProfileSchema,
-    });
-    return profile;
+    return httpFetch(PROFILE_PATH, { schema: UserProfileSchema });
   }
 
-  async updateUserProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    const profile = await httpFetch(PROFILE_PATH, {
-      method: "PATCH",
-      body: updates,
-      schema: UserProfileSchema,
+  async startModule(moduleId: string): Promise<ModuleProgressEntry> {
+    return httpFetch(PROGRESS_START_PATH(assertSlug(moduleId, "module id")), {
+      method: "POST",
+      schema: ModuleProgressEntrySchema,
     });
-    return profile;
+  }
+
+  async getProgressOverview(): Promise<ProgressOverview> {
+    return httpFetch(PROGRESS_PATH, { schema: ProgressOverviewSchema });
   }
 
   async getQuizQuestions(
@@ -132,16 +143,28 @@ export class HttpApiClient implements ApiClient {
     });
   }
 
+  async getAttemptHistory(options: {
+    moduleId?: string;
+    limit?: number;
+  } = {}): Promise<QuizAttemptHistory> {
+    return httpFetch(QUIZ_ATTEMPTS_PATH, {
+      schema: QuizAttemptHistorySchema,
+      searchParams: {
+        moduleId: options.moduleId,
+        limit: options.limit,
+      },
+    });
+  }
+
   async getCertificates(): Promise<CertificateResource[]> {
     // Frontend-curated static resource (by design); no backend endpoint.
     return CERTIFICATES;
   }
 
   async resetProgress(): Promise<UserProfile> {
-    const profile = await httpFetch(PROGRESS_RESET_PATH, {
+    return httpFetch(PROGRESS_RESET_PATH, {
       method: "POST",
       schema: UserProfileSchema,
     });
-    return profile;
   }
 }

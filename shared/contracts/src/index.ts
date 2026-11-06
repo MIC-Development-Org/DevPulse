@@ -1,94 +1,28 @@
 // DevPulse shared API contracts (frontend <-> backend boundary).
 //
+// SECURITY LAYOUT (Phase 5, decision D6): the browser-safe surface lives in
+// `./shared-schemas` and exports everything EXCEPT the authored quiz bank
+// schema below. Next.js client code imports that surface directly
+// (`@devpulse/contracts/src/shared-schemas`), which structurally keeps the
+// grading-truth schema out of browser bundles — webpack cannot prove zod
+// builder calls pure, so a dead-but-included statement inside one big barrel
+// once shipped the answer-key property name into a client chunk (proved by
+// scripts/check-production-bundle.mjs). The backend keeps importing the full
+// set from `@devpulse/contracts` and remains the only re-combiner of the
+// authoring schema with the public contracts.
+//
 // Moved verbatim from frontend/src/lib/contracts/index.ts during the backend
 // separation, minus the certificate schemas, which are a frontend-curated
 // feature (static directory, no backend endpoint) and remain in the frontend.
 import { z } from "zod";
 
-// Authentication & authorization contracts (Phase 2).
-export * from "./auth";
+// Everything client-safe (auth, http envelope, tracks/modules, quiz
+// submission/result/progress contracts).
+export * from "./shared-schemas";
 
-// HTTP communication contracts (Phase 3): shared error envelope + codes.
-export * from "./api";
-
-export const ModuleLevelSchema = z.enum(["beginner", "intermediate", "advanced"]);
-export type ModuleLevel = z.infer<typeof ModuleLevelSchema>;
-
-export const SourceCitationSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  license: z.string(),
-  author: z.string().optional(),
-});
-export type SourceCitation = z.infer<typeof SourceCitationSchema>;
-
-export const VideoChapterSchema = z.object({
-  timestamp: z.string(),
-  title: z.string(),
-  seconds: z.number(),
-});
-export type VideoChapter = z.infer<typeof VideoChapterSchema>;
-
-export const EmbeddedVideoSchema = z.object({
-  title: z.string(),
-  youtubeId: z.string(),
-  channel: z.string(),
-  license: z.string(),
-  chapters: z.array(VideoChapterSchema),
-});
-export type EmbeddedVideo = z.infer<typeof EmbeddedVideoSchema>;
-
-export const CheatSheetSnippetSchema = z.object({
-  title: z.string(),
-  code: z.string(),
-  language: z.string(),
-  explanation: z.string(),
-});
-export type CheatSheetSnippet = z.infer<typeof CheatSheetSnippetSchema>;
-
-export const CheatSheetSchema = z.object({
-  title: z.string(),
-  summary: z.string(),
-  snippets: z.array(CheatSheetSnippetSchema),
-});
-export type CheatSheet = z.infer<typeof CheatSheetSchema>;
-
-export const ModuleMetaSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  trackId: z.string(),
-  trackSlug: z.string(),
-  title: z.string(),
-  description: z.string(),
-  order: z.number(),
-  level: ModuleLevelSchema,
-  estimatedMinutes: z.number(),
-  prerequisites: z.array(z.string()),
-  learningOutcomes: z.array(z.string()),
-  sources: z.array(SourceCitationSchema),
-  video: EmbeddedVideoSchema.optional(),
-  cheatSheet: CheatSheetSchema.optional(),
-  hasGitVisualizer: z.boolean().default(false),
-});
-export type ModuleMeta = z.infer<typeof ModuleMetaSchema>;
-
-export const TrackSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  trackNumber: z.number(),
-  title: z.string(),
-  subtitle: z.string(),
-  description: z.string(),
-  color: z.enum(["mint", "blue", "amber"]),
-  hexAccent: z.string(),
-  moduleCount: z.number(),
-  estimatedHours: z.number(),
-  level: ModuleLevelSchema,
-  icon: z.string(),
-  modules: z.array(ModuleMetaSchema),
-});
-export type Track = z.infer<typeof TrackSchema>;
-
+/** The ONLY schema on the server-restricted side of the boundary.
+ * Authored question bank row — `correctOptionIndex` is the answer key.
+ * Client bundles import from `./shared-schemas` and can never reach this. */
 export const QuizQuestionSchema = z.object({
   id: z.string(),
   topic: z.string(),
@@ -99,125 +33,3 @@ export const QuizQuestionSchema = z.object({
   hint: z.string(),
 });
 export type QuizQuestion = z.infer<typeof QuizQuestionSchema>;
-
-export const QuizConfigSchema = z.object({
-  passPercentage: z.number().default(80),
-  questionsPerAttempt: z.number().default(8),
-});
-export type QuizConfig = z.infer<typeof QuizConfigSchema>;
-
-export const QuizSubmissionSchema = z.object({
-  moduleId: z.string(),
-  answers: z.record(z.string(), z.number()), // questionId -> selectedOptionIndex
-});
-export type QuizSubmission = z.infer<typeof QuizSubmissionSchema>;
-
-export const TopicBreakdownSchema = z.object({
-  topic: z.string(),
-  correct: z.number(),
-  total: z.number(),
-  percentage: z.number(),
-});
-export type TopicBreakdown = z.infer<typeof TopicBreakdownSchema>;
-
-export const MissedTopicSchema = z.object({
-  topic: z.string(),
-  explanation: z.string(),
-  reviewConcept: z.string(),
-});
-export type MissedTopic = z.infer<typeof MissedTopicSchema>;
-
-export const QuizResultSchema = z.object({
-  submissionId: z.string(),
-  moduleId: z.string(),
-  score: z.number(),
-  totalQuestions: z.number(),
-  percentage: z.number(),
-  passed: z.boolean(),
-  passMarkPercentage: z.number(),
-  topicBreakdown: z.array(TopicBreakdownSchema),
-  missedTopics: z.array(MissedTopicSchema),
-  unlockedNextModuleId: z.string().nullable(),
-  message: z.string(),
-});
-export type QuizResult = z.infer<typeof QuizResultSchema>;
-
-export const BadgeSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string(),
-  icon: z.string(),
-  trackId: z.string().optional(),
-  unlockedAt: z.string().nullable(),
-});
-export type Badge = z.infer<typeof BadgeSchema>;
-
-export const UserProfileSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  username: z.string(),
-  email: z.string().email(),
-  avatarUrl: z.string(),
-  streakDays: z.number(),
-  completedModuleIds: z.array(z.string()),
-  unlockedModuleIds: z.array(z.string()),
-  currentModuleId: z.string(),
-  quizScores: z.record(z.string(), z.number()), // moduleId -> highest score percentage
-  weeklyActivity: z.record(z.string(), z.number()), // ISO date string -> activity level 0..4
-  badges: z.array(BadgeSchema),
-});
-export type UserProfile = z.infer<typeof UserProfileSchema>;
-
-// ---------------------------------------------------------------------------
-// Public learning-content API contracts (Phase 4: database-backed tracks and
-// modules).
-//
-// PostgreSQL is authoritative for existence, ids, relationships and ordering;
-// shared/curriculum remains the editorial content source; Express composes
-// both server-side. These public response schemas are shape-compatible with
-// the curriculum schemas above, so consumer pages render identically.
-//
-// SECURITY: the public quiz contract omits `correctOptionIndex` AND
-// `explanation` at contract level — answer keys and explanations only
-// re-enter through graded results in a later phase. An empty questions array
-// means the module has no authored bank; there are no fallback banks.
-// ---------------------------------------------------------------------------
-
-/** GET /tracks/:trackSlug/modules — light, ordered module card. */
-export const ModuleListItemSchema = z.object({
-  id: z.string(),
-  slug: z.string(),
-  trackId: z.string(),
-  trackSlug: z.string(),
-  title: z.string(),
-  description: z.string(),
-  order: z.number(),
-  level: ModuleLevelSchema,
-  estimatedMinutes: z.number(),
-  hasGitVisualizer: z.boolean(),
-  quizQuestionCount: z.number().min(0),
-});
-export type ModuleListItem = z.infer<typeof ModuleListItemSchema>;
-
-/** GET /tracks/:trackSlug/modules/:moduleSlug — full module reader payload. */
-export const ModuleDetailSchema = ModuleMetaSchema.extend({
-  quizQuestionCount: z.number().min(0),
-});
-export type ModuleDetail = z.infer<typeof ModuleDetailSchema>;
-
-/** GET /tracks and GET /tracks/:slug — nested modules (approved deviation:
- * hub, dashboard and track pages consume the full structure in one round
- * trip; switching to summaries would redesign those pages). */
-export const TrackListSchema = z.array(TrackSchema);
-export type TrackList = z.infer<typeof TrackListSchema>;
-export const TrackDetailSchema = TrackSchema;
-export type TrackDetail = z.infer<typeof TrackDetailSchema>;
-
-/** GET /tracks/:trackSlug/modules/:moduleSlug/quiz — browser-safe question. */
-export const PublicQuizQuestionSchema = QuizQuestionSchema.omit({
-  correctOptionIndex: true,
-  explanation: true,
-});
-export type PublicQuizQuestion = z.infer<typeof PublicQuizQuestionSchema>;
-export const PublicQuizQuestionListSchema = z.array(PublicQuizQuestionSchema);
-export type PublicQuizQuestionList = z.infer<typeof PublicQuizQuestionListSchema>;

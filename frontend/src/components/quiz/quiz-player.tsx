@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { QuizResult, PublicQuizQuestion } from "@/lib/contracts";
 import { api } from "@/lib/api/api-client";
+import { useToast } from "../ui/toast";
 import { SegmentedProgressBar } from "../ui/progress-bar";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -70,12 +71,14 @@ export function QuizPlayer({
   questions,
 }: QuizPlayerProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [currentIndex, setCurrentIndex] = React.useState<number>(0);
   const [direction, setDirection] = React.useState<number>(1);
   const [answers, setAnswers] = React.useState<Record<string, number>>({});
   const [showHint, setShowHint] = React.useState<boolean>(false);
   const [showReviewModal, setShowReviewModal] = React.useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<QuizResult | null>(null);
   const [selectedFlash, setSelectedFlash] = React.useState<number | null>(null);
 
@@ -135,13 +138,27 @@ export function QuizPlayer({
   };
 
   const handleSubmit = async () => {
+    // D3: the browser submits `{moduleId, answers}` only; grading is fully
+    // server-side. Empty submissions are blocked before the request (the
+    // backend answers 400 independently).
+    if (answeredCount === 0) {
+      setSubmitError("Answer at least one question before submitting.");
+      setShowReviewModal(true);
+      return;
+    }
+
     setShowReviewModal(false);
+    setSubmitError(null);
     setIsSubmitting(true);
     try {
       const res = await api.submitQuiz({ moduleId, answers });
       setResult(res);
     } catch {
-      // Error handling — show toast in production
+      // Honest failure state (no mock grading fallback exists, by design):
+      // refresh restores full attempt history server-side, so no data loss.
+      setSubmitError("Grading could not be completed. Please try again.");
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsSubmitting(false);
     }
@@ -152,6 +169,7 @@ export function QuizPlayer({
     setAnswers({});
     setCurrentIndex(0);
     setShowHint(false);
+    setSubmitError(null);
     router.refresh();
   };
 
@@ -406,6 +424,19 @@ export function QuizPlayer({
         </DialogContent>
 
         <DialogFooter>
+          <div className="w-full space-y-2">
+            {answeredCount === 0 && (
+              <p className="text-xs font-mono text-amber-600 dark:text-amber-400">
+                No questions answered yet — grading is blocked until you answer
+                at least one question.
+              </p>
+            )}
+            {submitError && (
+              <p className="text-xs font-mono text-rose-600 dark:text-rose-400" role="alert">
+                {submitError}
+              </p>
+            )}
+          </div>
           <Button variant="outline" size="sm" onClick={() => setShowReviewModal(false)}>
             Back to Quiz
           </Button>
@@ -414,7 +445,10 @@ export function QuizPlayer({
             size="sm"
             onClick={handleSubmit}
             isLoading={isSubmitting}
-            className="font-semibold"
+            // D3: submitions are blocked at zero answered — the server would
+            // 400, and 100%-by-emptiness must be impossible.
+            disabled={answeredCount === 0}
+            className="font-semibold disabled:opacity-50"
           >
             Submit for Grading (80% to Pass)
           </Button>

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { ApiErrorEnvelope } from "@devpulse/contracts";
+// Like every runtime plane under src/lib/api, the transport reaches the
+// shared package only through the browser-safe surface (D6 — see
+// shared-schemas.ts); the server barrel with the bank schema stays unreachable.
+import type { ApiErrorEnvelope } from "@devpulse/contracts/src/shared-schemas";
 import {
   ApiError,
   ApiSchemaError,

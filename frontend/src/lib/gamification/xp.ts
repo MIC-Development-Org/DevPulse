@@ -106,3 +106,19 @@ export function addXP(amount: number): XPState {
   return computeXPState(next);
 }
 
+/**
+ * Phase 5: progress reset also clears local XP (D5 — XP stays client-side,
+ * so a full "reset progress" is only honest when the local level goes too).
+ * Returns the post-reset state (default SSR fallback level).
+ */
+export function resetXP(): XPState {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // localStorage unavailable
+    }
+  }
+  return computeXPState(getStoredXP());
+}
+

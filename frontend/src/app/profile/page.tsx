@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { api } from "@/lib/api/api-client";
+import { ApiError } from "@/lib/api/errors";
 import { UserProfile, Track } from "@/lib/contracts";
-import { readXPState, type XPState } from "@/lib/gamification/xp";
+import { readXPState, resetXP, type XPState } from "@/lib/gamification/xp";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import {
   Calendar,
   CheckCircle2,
   Lock,
+  LogIn,
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -28,6 +31,9 @@ export default function ProfilePage() {
   const [user, setUser] = React.useState<UserProfile | null>(null);
   const [tracks, setTracks] = React.useState<Track[]>([]);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  // Phase 5 decision D1: 401 → honest inline sign-in panel (no mock data).
+  const [signedOut, setSignedOut] = React.useState<boolean>(false);
+  const [loadFailed, setLoadFailed] = React.useState<boolean>(false);
   const [xpState, setXpState] = React.useState<XPState | null>(null);
 
   React.useEffect(() => {
@@ -37,6 +43,12 @@ export default function ProfilePage() {
         setUser(u);
         setTracks(t);
         setXpState(readXPState());
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          setSignedOut(true);
+        } else {
+          setLoadFailed(true);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -65,21 +77,85 @@ export default function ProfilePage() {
   };
 
   const handleResetData = async () => {
-    if (confirm("Reset all learning progress, quiz scores and unlock states back to default seed?")) {
-      const resetUser = await api.resetProgress();
-      setUser(resetUser);
-      showToast({
-        title: "Progress Restored",
-        description: "Default state reloaded successfully.",
-        type: "success",
-      });
+    if (confirm("Reset all learning progress, quiz scores and unlock states? This clears your server progress and local XP.")) {
+      try {
+        const resetUser = await api.resetProgress();
+        setUser(resetUser);
+        // D5: XP stays client-side — a full reset clears local XP as well.
+        setXpState(resetXP());
+        showToast({
+          title: "Progress Reset",
+          description: "All server progress and local XP cleared.",
+          type: "success",
+        });
+      } catch {
+        showToast({
+          title: "Reset failed",
+          description: "The progress reset could not be completed. Please try again.",
+          type: "error",
+        });
+      }
     }
   };
 
-  if (isLoading || !user) {
+  if (isLoading) {
     return (
       <div className="py-20 text-center">
         <div className="w-8 h-8 border-2 border-mint border-t-transparent rounded-full animate-spin mx-auto" />
+      </div>
+    );
+  }
+
+  if (signedOut) {
+    return (
+      <div className="max-w-md mx-auto py-24 px-4">
+        <Card>
+          <CardContent className="pt-8 pb-6 text-center space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-2xl border border-mint/40 bg-mint/10 flex items-center justify-center">
+              <LogIn className="w-5 h-5 text-mint" />
+            </div>
+            <h1 className="font-display text-xl font-bold text-foreground">
+              Sign in to view your profile
+            </h1>
+            <p className="text-sm text-foreground/60 leading-relaxed">
+              Profile stats are composed from your real learning activity.
+              Sign in to see your streaks, badges and attempt history.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <Link href="/login">
+                <Button variant="primary" size="sm">
+                  <LogIn className="w-4 h-4 mr-1.5" /> Sign In
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button variant="ghost" size="sm">
+                  Create Account
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (loadFailed || !user) {
+    return (
+      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
+        <Card>
+          <CardContent className="pt-8 pb-6 space-y-4">
+            <h1 className="font-display text-lg font-bold text-foreground">
+              Your profile could not be loaded
+            </h1>
+            <p className="text-sm text-foreground/60">
+              Live data is unreachable right now. No fallback data is shown by
+              design — please retry.
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -156,7 +232,7 @@ export default function ProfilePage() {
             onClick={handleResetData}
             className="text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
           >
-            <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Mock State
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Progress
           </Button>
         </div>
       </div>

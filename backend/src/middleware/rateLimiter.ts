@@ -47,3 +47,21 @@ export const loginRateLimiter = (
     windowMs: env.RATE_LIMIT_LOGIN_WINDOW_MS,
     max: env.RATE_LIMIT_LOGIN_MAX,
   });
+
+/** POST /me/quiz/submissions — one persisted graded attempt per call. */
+export const quizSubmitRateLimiter = (
+  overrides?: Partial<RateLimitOptions>
+): RequestHandler =>
+  createRateLimiter(overrides, {
+    windowMs: env.RATE_LIMIT_QUIZ_SUBMIT_WINDOW_MS,
+    max: env.RATE_LIMIT_QUIZ_SUBMIT_MAX,
+  });
+
+/** Progress mutations (start/reset) — lighter touch, higher allowance. */
+export const progressMutationRateLimiter = (
+  overrides?: Partial<RateLimitOptions>
+): RequestHandler =>
+  createRateLimiter(overrides, {
+    windowMs: env.RATE_LIMIT_PROGRESS_WINDOW_MS,
+    max: env.RATE_LIMIT_PROGRESS_MAX,
+  });

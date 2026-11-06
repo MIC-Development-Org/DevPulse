@@ -5,8 +5,9 @@ import {
   QuizQuestionSchema,
   QuizSubmissionSchema,
   QuizResultSchema,
-  CertificateResourceSchema,
-} from "@/lib/contracts";
+} from "@devpulse/contracts";
+// The certificate schema is a frontend-owned runtime value (static feature).
+import { CertificateResourceSchema } from "@/lib/contracts";
 import { TRACKS, CERTIFICATES } from "@/lib/data/mock-data";
 
 describe("Zod Contracts & Data Integrity", () => {

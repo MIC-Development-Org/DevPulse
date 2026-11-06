@@ -1,5 +1,7 @@
-import type { ApiErrorCode, ApiErrorEnvelope } from "@devpulse/contracts";
-import { apiErrorCodeForStatus } from "@devpulse/contracts";
+// Client code imports the BROWSER-SAFE surface (never the server barrel,
+// which holds the quiz bank schema — see shared-schemas.ts security note).
+import type { ApiErrorCode, ApiErrorEnvelope } from "@devpulse/contracts/src/shared-schemas";
+import { apiErrorCodeForStatus } from "@devpulse/contracts/src/shared-schemas";
 
 /**
  * Typed errors for the DevPulse HTTP communication layer (Phase 3).
