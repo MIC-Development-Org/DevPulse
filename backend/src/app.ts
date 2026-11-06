@@ -8,10 +8,12 @@ import { createRouter } from "./routes";
 
 /** Options for createApp — primarily for integration tests. */
 export interface AppOptions {
-  /** Overrides env-driven auth rate limits (register + login). */
+  /** Overrides env-driven rate limits (auth + Phase 5 mutations). */
   rateLimits?: {
     register?: { windowMs: number; max: number };
     login?: { windowMs: number; max: number };
+    quizSubmit?: { windowMs: number; max: number };
+    progressMutation?: { windowMs: number; max: number };
   };
 }
 

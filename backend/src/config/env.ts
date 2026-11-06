@@ -28,6 +28,14 @@ const EnvSchema = z.object({
   RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().positive().default(20),
   RATE_LIMIT_LOGIN_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
 
+  // --- Rate limiting for user-scoped progress mutations (Phase 5, per client
+  // IP). Submissions are capped tighter than progress touches because each
+  // one persists a graded attempt row.
+  RATE_LIMIT_QUIZ_SUBMIT_MAX: z.coerce.number().int().positive().default(20),
+  RATE_LIMIT_QUIZ_SUBMIT_WINDOW_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+  RATE_LIMIT_PROGRESS_MAX: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_PROGRESS_WINDOW_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+
   /**
    * Express 5 "trust proxy" setting: number of trusted hops in front of this
    * server (e.g. 1 when behind a single reverse proxy). Leave 0 when Express
