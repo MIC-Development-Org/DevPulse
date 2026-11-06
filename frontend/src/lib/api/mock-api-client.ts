@@ -1,6 +1,6 @@
 ﻿import type {
   Track,
-  ModuleMeta,
+  ModuleDetail,
   QuizQuestion,
   QuizSubmission,
   QuizResult,
@@ -8,6 +8,7 @@
   UserProfile,
   TopicBreakdown,
   MissedTopic,
+  PublicQuizQuestion,
 } from "../contracts";
 import {
   TRACKS,
@@ -50,11 +51,14 @@ export class MockApiClient implements ApiClient {
     return track || null;
   }
 
-  async getModuleBySlug(trackSlug: string, moduleSlug: string): Promise<ModuleMeta | null> {
+  async getModuleBySlug(trackSlug: string, moduleSlug: string): Promise<ModuleDetail | null> {
     const track = TRACKS.find((t) => t.slug === trackSlug);
     if (!track) return null;
     const mod = track.modules.find((m) => m.slug === moduleSlug);
-    return mod || null;
+    if (!mod) return null;
+    // Phase 4 parity with the live API: readers carry the authored question
+    // count so the UI can show an honest "quiz coming soon" state.
+    return { ...mod, quizQuestionCount: QUIZ_BANKS[mod.id]?.length ?? 0 };
   }
 
   async getUserProfile(): Promise<UserProfile> {
@@ -73,20 +77,25 @@ export class MockApiClient implements ApiClient {
     return MOCK_USER;
   }
 
-  async getQuizQuestions(moduleId: string): Promise<Omit<QuizQuestion, "correctOptionIndex">[]> {
-    // Look up question bank for the module, or generate dynamic questions
-    let bank = QUIZ_BANKS[moduleId];
-    if (!bank || bank.length === 0) {
-      // Fallback to git-basics bank or react bank for demonstration
-      bank = QUIZ_BANKS["mod-0-5"] || [];
+  async getQuizQuestions(
+    trackSlug: string,
+    moduleSlug: string
+  ): Promise<PublicQuizQuestion[]> {
+    // Phase 4: addressed by (track, module) slug pair, exactly like the live
+    // API. NO fallback banks and NO fabricated questions: a module without an
+    // authored bank gets an empty list (UI shows "quiz coming soon"), and the
+    // full authored bank is returned in authored order — parity with the
+    // backend endpoint.
+    const track = TRACKS.find((t) => t.slug === trackSlug);
+    const mod = track?.modules.find((m) => m.slug === moduleSlug);
+    if (!track || !mod) {
+      throw new Error("Module not found");
     }
+    const bank = QUIZ_BANKS[mod.id] ?? [];
 
-    // Shuffle and pick config amount (default 8)
-    const shuffled = [...bank].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, QUIZ_CONFIG.questionsPerAttempt);
-
-    // SECURITY: Strip correctOptionIndex so client cannot cheat!
-    return selected.map(({ correctOptionIndex, ...safeQuestion }) => safeQuestion);
+    // SECURITY/CONTRACT: strip both server-only fields (correctOptionIndex AND
+    // explanation) so the browser receives exactly PublicQuizQuestion.
+    return bank.map(({ correctOptionIndex: _correct, explanation: _explanation, ...safeQuestion }) => safeQuestion);
   }
 
   async submitQuiz(submission: QuizSubmission): Promise<QuizResult> {

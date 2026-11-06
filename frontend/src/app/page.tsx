@@ -11,7 +11,8 @@ import { BentoFeatures } from "@/components/landing/bento-features";
 import { StepsJourney } from "@/components/landing/steps-journey";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TRACKS } from "@/lib/data/mock-data";
+import { api } from "@/lib/api/api-client";
+import type { Track } from "@/lib/contracts";
 import {
   ArrowRight,
   Terminal,
@@ -102,7 +103,7 @@ function Reveal({
 }
 
 // ─── Track card ───────────────────────────────────────────────────────────────
-function TrackCard({ track, index }: { track: (typeof TRACKS)[0]; index: number }) {
+function TrackCard({ track, index }: { track: Track; index: number }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
   const [hovered, setHovered] = React.useState(false);
@@ -200,6 +201,31 @@ function TrackCard({ track, index }: { track: (typeof TRACKS)[0]; index: number 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function LandingPage() {
+  // Phase 4: real DB-backed curriculum via the BFF. No silent mock fallback —
+  // failures surface as an explicit inline panel with a retry.
+  const [tracks, setTracks] = React.useState<Track[] | null>(null);
+  const [tracksFailed, setTracksFailed] = React.useState(false);
+
+  const loadTracks = React.useCallback(() => {
+    let cancelled = false;
+    api
+      .getTracks()
+      .then((data) => {
+        if (!cancelled) {
+          setTracks(data);
+          setTracksFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTracksFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => loadTracks(), [loadTracks]);
+
   // Target-based progress: fade is anchored to the hero section itself, so
   // content stays fully visible until the hero actually leaves the viewport.
   const heroRef = React.useRef<HTMLElement>(null);
@@ -379,11 +405,32 @@ export default function LandingPage() {
           </div>
         </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {TRACKS.map((track, i) => (
-            <TrackCard key={track.id} track={track} index={i} />
-          ))}
-        </div>
+        {tracksFailed ? (
+          <div className="text-center space-y-4 py-10">
+            <p className="text-sm text-foreground/60 font-mono">
+              The live curriculum is temporarily unavailable. Please try again.
+            </p>
+            <Button variant="outline" onClick={loadTracks}>
+              Retry
+            </Button>
+          </div>
+        ) : !tracks ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-72 rounded-3xl border border-border bg-card/60 animate-pulse"
+                aria-hidden
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {tracks.map((track, i) => (
+              <TrackCard key={track.id} track={track} index={i} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ─── 2.5 PLATFORM SUPERPOWERS (bento grid) ────────────────────────── */}

@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { z } from "zod";
 import type { ApiErrorEnvelope } from "@devpulse/contracts";
 import { ApiErrorEnvelopeSchema } from "@devpulse/contracts";
@@ -202,4 +203,61 @@ export async function jsonBackendResponse<T>(
       headers: { "cache-control": "no-store" },
     }),
   };
+}
+
+/**
+ * Typed error for server-page data fetching (Phase 4). Carries the backend
+ * status and the (already sanitized) envelope message; server components map
+ * `status === 404` to `notFound()` and let anything else bubble to the error
+ * boundary. Never silent: failed real requests never fall back to mocks.
+ */
+export class BackendHttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "BackendHttpError";
+    this.status = status;
+  }
+}
+
+/**
+ * Server-page JSON fetch (Phase 4): server-to-server call to the Express
+ * backend (no BFF hop for React Server Components), validated against the
+ * shared contract, with standardized envelopes surfaced as `BackendHttpError`.
+ *
+ * NOT for browser code (`httpFetch` exists for that) — the provided path is
+ * an Express path like "/tracks/git-basics".
+ */
+export async function backendFetchJson<T>(
+  path: string,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>
+): Promise<T> {
+  const response = await authedBackendFetch(path, {
+    headers: { accept: "application/json" },
+  });
+  const result = await jsonBackendResponse(response, { schema });
+  if (result.ok) {
+    return result.data;
+  }
+
+  const body = (await result.response.json().catch(() => null)) as
+    | { error?: unknown }
+    | null;
+  const message = typeof body?.error === "string" ? body.error : "Request failed";
+  throw new BackendHttpError(result.response.status, message);
+}
+
+/**
+ * Convenience wrapper for server components: maps backend 404s to Next's
+ * `notFound()` (NEXT_NOT_FOUND control flow) and rethrows every other
+ * failure. Call ONLY from React Server Components.
+ */
+export function withNotFound<T>(promise: Promise<T>): Promise<T> {
+  return promise.catch((error: unknown) => {
+    if (error instanceof BackendHttpError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  });
 }

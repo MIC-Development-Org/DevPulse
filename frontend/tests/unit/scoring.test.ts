@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { api } from "@/lib/api/api-client";
-import { QUIZ_CONFIG } from "@/lib/data/mock-data";
+import { TRACKS, QUIZ_BANKS, QUIZ_CONFIG } from "@/lib/data/mock-data";
+
+const gitModule = TRACKS.flatMap((t) => t.modules).find((m) => m.id === "mod-0-5")!;
+const gitTrack = TRACKS.find((t) => t.modules.some((m) => m.id === "mod-0-5"))!;
+const gitBank = QUIZ_BANKS["mod-0-5"];
 
 describe("Quiz Scoring Engine & Server-Side Evaluation (M3 Contract)", () => {
   it("enforces the configurable 80% pass threshold", () => {
@@ -59,16 +63,38 @@ describe("Quiz Scoring Engine & Server-Side Evaluation (M3 Contract)", () => {
     expect(result.missedTopics.length).toBe(6);
   });
 
-  it("strips correct answers when client requests quiz questions", async () => {
-    const questions = await api.getQuizQuestions("mod-0-5");
+  it("strips grading truth when client requests quiz questions", async () => {
+    const questions = await api.getQuizQuestions(gitTrack.slug, gitModule.slug);
 
-    expect(questions.length).toBe(QUIZ_CONFIG.questionsPerAttempt);
+    // Phase 4: the full authored bank is served (parity with the live API) —
+    // no shuffle/slice sampling and no fallback banks.
+    expect(gitBank).toBeTruthy();
+    expect(questions.length).toBe(gitBank!.length);
+    expect(questions.map((q) => q.id)).toEqual(gitBank!.map((q) => q.id));
     questions.forEach((q) => {
       // @ts-expect-error verifying that correctOptionIndex is not present
       expect(q.correctOptionIndex).toBeUndefined();
+      // @ts-expect-error verifying that explanation is not present either
+      expect(q.explanation).toBeUndefined();
+      expect(q.hint).toBeDefined();
       expect(q.options.length).toBeGreaterThanOrEqual(2);
       expect(q.question).toBeDefined();
     });
+  });
+
+  it("returns an empty list for modules without an authored bank (no fallback fabricating)", async () => {
+    const unbanked = TRACKS.flatMap((t) => t.modules).find((m) => !(m.id in QUIZ_BANKS))!;
+    const track = TRACKS.find((t) => t.modules.some((m) => m.id === unbanked.id))!;
+    expect(unbanked).toBeTruthy();
+
+    const questions = await api.getQuizQuestions(track.slug, unbanked.slug);
+    expect(questions).toEqual([]);
+  });
+
+  it("throws for a module that does not exist", async () => {
+    await expect(
+      api.getQuizQuestions("does-not-exist", "also-fake")
+    ).rejects.toThrow("Module not found");
   });
 });
 

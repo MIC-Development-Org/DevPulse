@@ -2,8 +2,8 @@
   "name": "@devpulse/curriculum",
   "version": "0.1.0",
   "private": true,
-  "main": "./src/tracks.ts",
-  "types": "./src/tracks.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "dependencies": {
     "@devpulse/contracts": "*"
   }
