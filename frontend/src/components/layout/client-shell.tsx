@@ -9,6 +9,7 @@ import { CommandPalette } from "../global/command-palette";
 import { ShortcutsModal } from "../global/shortcuts-modal";
 import { ScrollProgress } from "../global/scroll-progress";
 import { BackToTop } from "../global/back-to-top";
+import { MockDataBanner } from "../global/mock-banner";
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -39,6 +40,8 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         onOpenChange={setShortcutsModalOpen}
       />
       <BackToTop />
+      {/* Phase 3: explicit mock-mode visibility (adapter.ts guard is authoritative) */}
+      <MockDataBanner />
     </SessionProvider>
   );
 }

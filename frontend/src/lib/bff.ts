@@ -1,5 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { z } from "zod";
+import type { ApiErrorEnvelope } from "@devpulse/contracts";
+import { ApiErrorEnvelopeSchema } from "@devpulse/contracts";
 
 /**
  * BFF plumbing (Phase 2) — server-to-server calls from Next route handlers
@@ -81,4 +84,122 @@ export async function authedBackendFetch(
     headers,
     cache: "no-store",
   });
+}
+
+/** Result passed to explicit BFF route handlers (Phase 3 helpers). */
+export type BackendResult<T> =
+  | { readonly ok: true; readonly data: T }
+  | { readonly ok: false; readonly response: Response };
+
+/**
+ * Guard for BFF endpoints that require a signed-in browser session.
+ * Reuses getSessionToken() — no duplicated auth logic. Errors become
+ * 401s with the shared envelope; never leak whether a session row exists.
+ */
+export async function requireSessionToken(): Promise<
+  BackendResult<string>
+> {
+  const token = await getSessionToken();
+  if (token) return { ok: true, data: token };
+  return {
+    ok: false,
+    response: Response.json(
+      { error: "You need to sign in first." },
+      { status: 401, headers: { "cache-control": "no-store" } }
+    ),
+  };
+}
+
+export interface JsonBackendResponseOptions<T> {
+  /** Upstream statuses treated as success (default: any 2xx). */
+  successStatuses?: readonly number[];
+  /** Optional contract for the upstream success payload. */
+  schema?: z.ZodType<T, z.ZodTypeDef, unknown>;
+}
+
+/**
+ * Normalize an upstream Express response into a typed result plus a
+ * ready-to-forward Response (same status code, standardized envelope).
+ *
+ * Propagation rules (shared/contracts + backend/docs/auth-integration.md):
+ *  - upstream non-2xx: forward status + ApiErrorEnvelope body verbatim when
+ *    the backend produced it; otherwise a generic, internals-free envelope;
+ *  - malformed upstream success payloads: 502 with a generic envelope
+ *    (details stay inside this server process).
+ */
+export async function jsonBackendResponse<T>(
+  response: Response,
+  options: JsonBackendResponseOptions<T> = {}
+): Promise<BackendResult<T>> {
+  const success = options.successStatuses
+    ? options.successStatuses.includes(response.status)
+    : response.ok;
+
+  if (success) {
+    if (response.status === 204) {
+      return { ok: true, data: undefined as T };
+    }
+
+    let raw: unknown;
+    try {
+      raw = await response.json();
+    } catch {
+      console.error("[devpulse bff] malformed upstream success body");
+      return {
+        ok: false,
+        response: Response.json(
+          { error: "The service returned a malformed response." },
+          { status: 502, headers: { "cache-control": "no-store" } }
+        ),
+      };
+    }
+
+    if (options.schema) {
+      const parsed = options.schema.safeParse(raw);
+      if (!parsed.success) {
+        // Log issue paths only — never the received payload itself.
+        const issuePaths = parsed.error.issues.map((issue) => issue.path.join("."));
+        console.error(
+          "[devpulse bff] upstream payload contract mismatch:",
+          issuePaths.join(", ") || "(root)"
+        );
+        return {
+          ok: false,
+          response: Response.json(
+            { error: "The service returned an unexpected payload." },
+            { status: 502, headers: { "cache-control": "no-store" } }
+          ),
+        };
+      }
+      return { ok: true, data: parsed.data };
+    }
+
+    return { ok: true, data: raw as T };
+  }
+
+  // Non-2xx: best-effort envelope propagation (status is preserved).
+  const raw: unknown = await response
+    .json()
+    .catch(() => null);
+  const upstream = ApiErrorEnvelopeSchema.safeParse(raw);
+  const upstreamEnvelope = upstream.success ? upstream.data : null;
+
+  if (!upstreamEnvelope) {
+    console.error("[devpulse bff] upstream failure", response.status);
+  }
+
+  const errorEnvelope: ApiErrorEnvelope = upstreamEnvelope ?? {
+    error:
+      response.status >= 500
+        ? "The service failed to handle the request."
+        : "The request was rejected.",
+  };
+
+  return {
+    ok: false,
+    response: Response.json(errorEnvelope, {
+      status: response.status,
+      headers: { "cache-control": "no-store" },
+    }),
+  };
 }
