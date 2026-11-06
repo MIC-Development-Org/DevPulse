@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -11,10 +11,11 @@ import { describe, expect, it } from "vitest";
  *     (identity is exclusively the BFF's job, lib/bff.ts).
  *  3. BFF source keeps `server-only` first and never references the browser
  *     mock/base-url flag.
- *  4. The hard production mock guard stays in adapter.ts and remains the
- *     documented escape (ALLOW_MOCK_IN_PRODUCTION=true lives ONLY in the
- *     Playwright e2e webServer command).
- *  5. The five dead mock routes keep their 501 dead-route gate.
+ *  4. The hard production mock guard stays in adapter.ts/selection.ts; the
+ *     e2e webServer runs against the live DB-backed API (no mock topology).
+ *  5. The three non-content dead routes keep their 501 gate; the four real
+ *     business proxies (tracks/modules/quiz) exist and are server-side BFF
+ *     calls with contract re-validation.
  */
 
 function repoSource(...segments: string[]): string {
@@ -108,13 +109,14 @@ describe("hard production mock guard", () => {
     expect(source).not.toContain("assertMockSelectionAllowed");
     expect(source).not.toContain("ALLOW_MOCK_IN_PRODUCTION");
     expect(source).toContain("new MockApiClient()");
-    expect(source).toContain("new HttpApiClient()");
+    expect(source).toContain("new HybridApiClient()");
   });
 
-  it("the e2e webServer is the only sanctioned ALLOW_MOCK_IN_PRODUCTION consumer", () => {
+  it("the e2e webServer runs against the live DB-backed API (no mock topology)", () => {
     const config = repoSource("playwright.config.ts");
-    expect(config).toContain("NEXT_PUBLIC_API_MOCK=true");
-    expect(config).toContain("ALLOW_MOCK_IN_PRODUCTION=true");
+    expect(config).toContain("NEXT_PUBLIC_API_MOCK=false");
+    // Comment-proffed: only executable topology may mention the hatch.
+    expect(stripComments(config)).not.toContain("ALLOW_MOCK_IN_PRODUCTION");
   });
 
   it("no other production source even mentions the escape hatch", () => {
@@ -160,19 +162,48 @@ describe("mock visibility", () => {
   });
 });
 
-describe("dead-route gates (Phase 3 fallback behavior)", () => {
-  const routes = [
-    path.join("src", "app", "api", "tracks", "route.ts"),
-    path.join("src", "app", "api", "tracks", "[slug]", "route.ts"),
+describe("dead-route gates and real business proxies (Phase 4 topology)", () => {
+  const gates = [
     path.join("src", "app", "api", "quiz", "submit", "route.ts"),
     path.join("src", "app", "api", "certificates", "route.ts"),
     path.join("src", "app", "api", "user", "profile", "route.ts"),
   ];
 
-  it.each(routes)("%s keeps the 501 dead-route gate", (route) => {
+  it.each(gates)("%s keeps the 501 dead-route gate", (route) => {
     const source = readFileSync(path.join(S, route), "utf8");
     expect(source).toContain("businessRouteNotImplemented");
     expect(source).toContain("notImplementedResponse");
+  });
+
+  it("the Phase 3 mock tracks gates are retired (real proxies replaced them)", () => {
+    expect(existsSync(path.join(S, "src", "app", "api", "tracks", "route.ts"))).toBe(false);
+    expect(existsSync(path.join(S, "src", "app", "api", "tracks", "[slug]", "route.ts"))).toBe(false);
+  });
+
+  const proxies = [
+    path.join("src", "app", "api", "business", "tracks", "route.ts"),
+    path.join("src", "app", "api", "business", "tracks", "[slug]", "route.ts"),
+    path.join(
+      "src", "app", "api", "business", "tracks", "[slug]", "modules", "[moduleSlug]", "route.ts"
+    ),
+    path.join(
+      "src", "app", "api", "business", "tracks", "[slug]", "modules", "[moduleSlug]", "quiz", "route.ts"
+    ),
+  ];
+
+  it.each(proxies)("%s is a real server-side BFF proxy", (route) => {
+    const source = readFileSync(path.join(S, route), "utf8");
+    // Server-to-server call + centralized envelope propagation — never mock
+    // payloads from lib/data, never browser fetch semantics.
+    expect(source).toContain("authedBackendFetch");
+    expect(source).toContain("jsonBackendResponse");
+  });
+
+  it("the quiz proxy re-validates the browser-safe public contract", () => {
+    const source = repoSource(
+      "src", "app", "api", "business", "tracks", "[slug]", "modules", "[moduleSlug]", "quiz", "route.ts"
+    );
+    expect(source).toContain("PublicQuizQuestionListSchema");
   });
 
   it("the guard derives from the adapter selection primitives", () => {

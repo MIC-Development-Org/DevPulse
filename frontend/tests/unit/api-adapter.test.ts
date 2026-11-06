@@ -59,14 +59,15 @@ describe("adapter selection primitives", () => {
     expect(selection.computeMockSelection().active).toBe(true);
   });
 
-  it("selects the HTTP adapter under NEXT_PUBLIC_API_MOCK=false", async () => {
+  it("selects the hybrid adapter under NEXT_PUBLIC_API_MOCK=false (Phase 4)", async () => {
     withEnv("development", "false", undefined);
     const selection = await freshSelection();
     expect(selection.computeMockSelection().active).toBe(false);
+    expect(selection.getApiMode()).toBe("hybrid");
 
     const adapter = await import("@/lib/api/adapter");
     expect(adapter.api).toBeInstanceOf(
-      (await import("@/lib/api/http-api-client")).HttpApiClient
+      (await import("@/lib/api/hybrid-api-client")).HybridApiClient
     );
   });
 

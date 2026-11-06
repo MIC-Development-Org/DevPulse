@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Track, ModuleMeta } from "@/lib/contracts";
+import { Track, ModuleMeta, ModuleDetail } from "@/lib/contracts";
 import { TableOfContents, TocItem } from "@/components/reader/table-of-contents";
 import { Callout } from "@/components/reader/callout";
 import { CodeBlock } from "@/components/reader/code-block";
@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 interface ModuleReaderClientProps {
   track: Track;
-  moduleData: ModuleMeta;
+  moduleData: ModuleDetail;
   prevModule: ModuleMeta | null;
   nextModule: ModuleMeta | null;
 }
@@ -101,11 +101,22 @@ export function ModuleReaderClient({
               </Button>
             )}
 
-            <Link href={`/learn/${track.slug}/${moduleData.slug}/quiz`}>
-              <Button variant="primary" size="sm" className="text-xs h-8 font-semibold">
-                Take Quiz <ArrowRight className="w-3.5 h-3.5 ml-1" />
-              </Button>
-            </Link>
+            {moduleData.quizQuestionCount > 0 ? (
+              <Link href={`/learn/${track.slug}/${moduleData.slug}/quiz`}>
+                <Button variant="primary" size="sm" className="text-xs h-8 font-semibold">
+                  Take Quiz <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </Link>
+            ) : (
+              // Authored quiz bank not published yet — honest coming-soon chip.
+              <span
+                className="inline-flex items-center h-8 px-2.5 rounded-md border border-border bg-card-subtle/60 text-[11px] font-mono text-foreground/40"
+                aria-disabled
+                title="The mastery quiz for this module has not been published yet"
+              >
+                <Clock className="w-3.5 h-3.5 mr-1.5" /> Quiz coming soon
+              </span>
+            )}
           </div>
         </div>
 
@@ -456,15 +467,35 @@ git merge --no-ff feature/tokens -m "merge: incorporate design tokens"`}
                 8. Summary & Mastery Check
               </h2>
               <p className="text-sm text-foreground/80 leading-relaxed">
-                You have examined the internal state mechanics of this topic. To complete this module and unlock the next milestone on the track trail, you must pass the 8-question mastery quiz with a minimum score of <strong>80%</strong>.
+                You have examined the internal state mechanics of this topic. To
+                complete this module and unlock the next milestone on the track
+                trail, you must pass the{" "}
+                {moduleData.quizQuestionCount > 0
+                  ? `${moduleData.quizQuestionCount}-question mastery quiz with a minimum score of `
+                  : "mastery quiz with a minimum score of "}
+                <strong>80%</strong>
+                {moduleData.quizQuestionCount > 0
+                  ? "."
+                  : " as soon as the authored quiz is published."}
               </p>
 
               <div className="pt-2">
-                <Link href={`/learn/${track.slug}/${moduleData.slug}/quiz`}>
-                  <Button size="lg" variant="primary" className="font-semibold shadow-lg">
-                    Launch Mastery Quiz (80% Required) <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
+                {moduleData.quizQuestionCount > 0 ? (
+                  <Link href={`/learn/${track.slug}/${moduleData.slug}/quiz`}>
+                    <Button size="lg" variant="primary" className="font-semibold shadow-lg">
+                      Launch Mastery Quiz (80% Required) <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                ) : (
+                  // Authored quiz bank not published yet — honest coming-soon chip.
+                  <span
+                    className="inline-flex items-center h-10 pl-4 pr-5 rounded-lg border border-border bg-card-subtle/60 text-sm font-mono text-foreground/40"
+                    aria-disabled
+                    title="The mastery quiz for this module has not been published yet"
+                  >
+                    <Clock className="w-4 h-4 mr-2" /> Mastery quiz coming soon
+                  </span>
+                )}
               </div>
             </section>
 

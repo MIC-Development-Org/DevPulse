@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
+import { TrackDetailSchema } from "@devpulse/contracts";
 import { api } from "@/lib/api/api-client";
+import { backendFetchJson, withNotFound } from "@/lib/bff";
 import { LearningTrail } from "@/components/trail/learning-trail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,16 @@ export default async function TrackPage({
 }: {
   params: { track: string };
 }) {
-  const track = await api.getTrackBySlug(params.track);
-  if (!track) {
-    notFound();
-  }
-
+  // Phase 4: real DB-backed content straight from Express (server-to-server).
+  // Unknown slugs render the 404 page via withNotFound; anything else bubbles
+  // to the error boundary — no silent mock fallback.
+  const track = await withNotFound(
+    backendFetchJson(
+      `/tracks/${encodeURIComponent(params.track)}`,
+      TrackDetailSchema
+    )
+  );
+  // Phase 4 boundary: user profile remains mock until Phase 5.
   const user = await api.getUserProfile();
 
   const completedCount = track.modules.filter((m) =>

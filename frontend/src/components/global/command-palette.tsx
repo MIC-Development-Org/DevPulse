@@ -16,9 +16,9 @@ import {
   Terminal,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { TRACKS } from "@/lib/data/mock-data";
 import { useToast } from "../ui/toast";
 import { api } from "@/lib/api/api-client";
+import type { Track } from "@/lib/contracts";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -29,6 +29,33 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { showToast } = useToast();
+
+  // Phase 4: module navigation comes from the real DB-backed API. Fetched
+  // when the palette opens; failures are disclosed (never silently emptied).
+  const [tracks, setTracks] = React.useState<Track[] | null>(null);
+  const [tracksFailed, setTracksFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api
+      .getTracks()
+      .then((data) => {
+        if (!cancelled) {
+          setTracks(data);
+          setTracksFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTracks(null);
+          setTracksFailed(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -123,7 +150,26 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             </Command.Group>
 
             {/* Modules by Track */}
-            {TRACKS.map((track) => (
+            {tracks === null && !tracksFailed ? (
+              <Command.Group
+                heading="Live Curriculum"
+                className="text-xs font-semibold text-foreground/40 px-2 py-1 pt-3"
+              >
+                <div className="px-3 py-2 text-sm text-foreground/50">
+                  Loading curriculum…
+                </div>
+              </Command.Group>
+            ) : tracksFailed ? (
+              <Command.Group
+                heading="Live Curriculum"
+                className="text-xs font-semibold text-foreground/40 px-2 py-1 pt-3"
+              >
+                <div className="px-3 py-2 text-sm text-foreground/50">
+                  The live curriculum is temporarily unavailable — close and reopen the palette to retry.
+                </div>
+              </Command.Group>
+            ) : tracks && tracks.length > 0 ? (
+              tracks.map((track) => (
               <Command.Group
                 key={track.id}
                 heading={`Track ${track.trackNumber}: ${track.title}`}
@@ -155,7 +201,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   </Command.Item>
                 ))}
               </Command.Group>
-            ))}
+            ))
+            ) : (
+              <Command.Group
+                heading="Live Curriculum"
+                className="text-xs font-semibold text-foreground/40 px-2 py-1 pt-3"
+              >
+                <div className="px-3 py-2 text-sm text-foreground/50">
+                  No curriculum tracks available yet.
+                </div>
+              </Command.Group>
+            )}
 
             {/* Quick System Actions */}
             <Command.Group heading="Actions & System" className="text-xs font-semibold text-foreground/40 px-2 py-1 pt-3">

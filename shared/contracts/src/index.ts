@@ -167,3 +167,57 @@ export const UserProfileSchema = z.object({
   badges: z.array(BadgeSchema),
 });
 export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+// ---------------------------------------------------------------------------
+// Public learning-content API contracts (Phase 4: database-backed tracks and
+// modules).
+//
+// PostgreSQL is authoritative for existence, ids, relationships and ordering;
+// shared/curriculum remains the editorial content source; Express composes
+// both server-side. These public response schemas are shape-compatible with
+// the curriculum schemas above, so consumer pages render identically.
+//
+// SECURITY: the public quiz contract omits `correctOptionIndex` AND
+// `explanation` at contract level — answer keys and explanations only
+// re-enter through graded results in a later phase. An empty questions array
+// means the module has no authored bank; there are no fallback banks.
+// ---------------------------------------------------------------------------
+
+/** GET /tracks/:trackSlug/modules — light, ordered module card. */
+export const ModuleListItemSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  trackId: z.string(),
+  trackSlug: z.string(),
+  title: z.string(),
+  description: z.string(),
+  order: z.number(),
+  level: ModuleLevelSchema,
+  estimatedMinutes: z.number(),
+  hasGitVisualizer: z.boolean(),
+  quizQuestionCount: z.number().min(0),
+});
+export type ModuleListItem = z.infer<typeof ModuleListItemSchema>;
+
+/** GET /tracks/:trackSlug/modules/:moduleSlug — full module reader payload. */
+export const ModuleDetailSchema = ModuleMetaSchema.extend({
+  quizQuestionCount: z.number().min(0),
+});
+export type ModuleDetail = z.infer<typeof ModuleDetailSchema>;
+
+/** GET /tracks and GET /tracks/:slug — nested modules (approved deviation:
+ * hub, dashboard and track pages consume the full structure in one round
+ * trip; switching to summaries would redesign those pages). */
+export const TrackListSchema = z.array(TrackSchema);
+export type TrackList = z.infer<typeof TrackListSchema>;
+export const TrackDetailSchema = TrackSchema;
+export type TrackDetail = z.infer<typeof TrackDetailSchema>;
+
+/** GET /tracks/:trackSlug/modules/:moduleSlug/quiz — browser-safe question. */
+export const PublicQuizQuestionSchema = QuizQuestionSchema.omit({
+  correctOptionIndex: true,
+  explanation: true,
+});
+export type PublicQuizQuestion = z.infer<typeof PublicQuizQuestionSchema>;
+export const PublicQuizQuestionListSchema = z.array(PublicQuizQuestionSchema);
+export type PublicQuizQuestionList = z.infer<typeof PublicQuizQuestionListSchema>;

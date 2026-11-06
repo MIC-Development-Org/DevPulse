@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
-import { TRACKS } from "@/lib/data/mock-data";
+import { api } from "@/lib/api/api-client";
+import type { ModuleMeta, Track } from "@/lib/contracts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,8 +27,8 @@ function ModuleCard({
   track,
   idx,
 }: {
-  mod: (typeof TRACKS)[0]["modules"][0];
-  track: (typeof TRACKS)[0];
+  mod: ModuleMeta;
+  track: Track;
   idx: number;
 }) {
   const ref = React.useRef<HTMLAnchorElement>(null);
@@ -80,6 +81,31 @@ function ModuleCard({
 }
 
 export default function LearnPage() {
+  // Phase 4: real DB-backed learning content via the BFF (no silent mock
+  // fallback — failures show an explicit retry panel).
+  const [tracks, setTracks] = React.useState<Track[] | null>(null);
+  const [tracksFailed, setTracksFailed] = React.useState(false);
+
+  const loadTracks = React.useCallback(() => {
+    let cancelled = false;
+    api
+      .getTracks()
+      .then((data) => {
+        if (!cancelled) {
+          setTracks(data);
+          setTracksFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTracksFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => loadTracks(), [loadTracks]);
+
   return (
     <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
       {/* ── Header ── */}
@@ -102,7 +128,27 @@ export default function LearnPage() {
 
       {/* ── Track Cards ── */}
       <div className="space-y-14">
-        {TRACKS.map((track, trackIdx) => {
+        {tracksFailed ? (
+          <div className="text-center space-y-4 py-12">
+            <p className="text-sm text-foreground/60 font-mono">
+              The live curriculum is temporarily unavailable. Please try again.
+            </p>
+            <Button variant="outline" onClick={loadTracks}>
+              Retry
+            </Button>
+          </div>
+        ) : !tracks ? (
+          <>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-64 rounded-3xl border border-border bg-card/60 animate-pulse"
+                aria-hidden
+              />
+            ))}
+          </>
+        ) : (
+          tracks.map((track, trackIdx) => {
           const Icon = ICONS[track.icon as keyof typeof ICONS] || Globe;
           const accent = {
             mint:  { border: "border-mint/20",    text: "text-mint",    bg: "bg-mint/10",    badgeBorder: "border-mint/30",    iconColor: "#5EEAD4" },
@@ -179,7 +225,8 @@ export default function LearnPage() {
               </div>
             </motion.div>
           );
-        })}
+          })
+        )}
       </div>
     </div>
   );

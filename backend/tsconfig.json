@@ -13,7 +13,7 @@
     "types": ["node"],
     "paths": {
       "@devpulse/contracts": ["../shared/contracts/src/index.ts"],
-      "@devpulse/curriculum": ["../shared/curriculum/src/tracks.ts"]
+      "@devpulse/curriculum": ["../shared/curriculum/src/index.ts"]
     }
   },
   "include": ["src", "prisma/*.ts", "tests", "tools"],
