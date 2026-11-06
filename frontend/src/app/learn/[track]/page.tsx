@@ -1,11 +1,35 @@
 import Link from "next/link";
-import { TrackDetailSchema } from "@devpulse/contracts";
-import { api } from "@/lib/api/api-client";
-import { backendFetchJson, withNotFound } from "@/lib/bff";
+import { TrackDetailSchema, UserProfileSchema } from "@devpulse/contracts";
+import type { UserProfile } from "@/lib/contracts";
+import { backendFetchJson, BackendHttpError, getSessionToken, withNotFound } from "@/lib/bff";
+import { zeroedUserProfile } from "@/lib/profile/guest-profile";
 import { LearningTrail } from "@/components/trail/learning-trail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, BookOpen, CheckCircle2 } from "lucide-react";
+
+/**
+ * Authenticated profile for the track page (Phase 5 decision D1):
+ *  - guests (no session cookie)          -> REAL zeroed progress;
+ *  - signed-in users                     -> server-composed profile;
+ *  - expired/stale session cookies (401) -> zeroed progress (guest view).
+ * The mock user's progress is NEVER used — there is no phase-boundary mock
+ * fallback anymore.
+ */
+async function resolveProfile(): Promise<UserProfile> {
+  const sessionToken = await getSessionToken();
+  if (!sessionToken) {
+    return zeroedUserProfile();
+  }
+  try {
+    return await backendFetchJson("/me/profile", UserProfileSchema);
+  } catch (error) {
+    if (error instanceof BackendHttpError && error.status === 401) {
+      return zeroedUserProfile();
+    }
+    throw error;
+  }
+}
 
 export default async function TrackPage({
   params,
@@ -21,8 +45,7 @@ export default async function TrackPage({
       TrackDetailSchema
     )
   );
-  // Phase 4 boundary: user profile remains mock until Phase 5.
-  const user = await api.getUserProfile();
+  const user = await resolveProfile();
 
   const completedCount = track.modules.filter((m) =>
     user.completedModuleIds.includes(m.id)

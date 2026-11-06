@@ -10,6 +10,7 @@ import { VideoCard } from "@/components/reader/video-card";
 import { ModuleNotes } from "@/components/reader/module-notes";
 import { GitVisualizer } from "@/components/interactive/git-visualizer";
 import { CheatSheetModal } from "@/components/reader/cheat-sheet-modal";
+import { ProgressStartBeacon } from "@/components/reader/progress-start-beacon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { addXP } from "@/lib/gamification/xp";
@@ -79,6 +80,8 @@ export function ModuleReaderClient({
 
   return (
     <div className="min-h-screen bg-background relative">
+      {/* Phase 5: opening a module records engagement (never completes it). */}
+      <ProgressStartBeacon moduleId={moduleData.id} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Navigation Breadcrumb Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-4">

@@ -1,6 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { api } from "@/lib/api/api-client";
-import { TRACKS, QUIZ_BANKS, QUIZ_CONFIG } from "@/lib/data/mock-data";
+import { MockApiClient } from "@/lib/api/mock-api-client";
+import { TRACKS, QUIZ_CONFIG } from "@/lib/data/mock-data";
+import { QUIZ_BANKS } from "@devpulse/curriculum";
+
+/**
+ * The in-browser mock grading simulation (M3 contract, mock builds ONLY).
+ *
+ * Uses MockApiClient DIRECTLY — never the ambient `api` adapter — so these
+ * tests exercise the MOCK engine deterministically regardless of the
+ * NEXT_PUBLIC_API_MOCK environment that the test process inherits. Production
+ * grading is server-side and covered by the backend integration suite; this
+ * file exists purely to keep the mock build's simulation trustworthy.
+ */
+const api = new MockApiClient();
 
 const gitModule = TRACKS.flatMap((t) => t.modules).find((m) => m.id === "mod-0-5")!;
 const gitTrack = TRACKS.find((t) => t.modules.some((m) => m.id === "mod-0-5"))!;

@@ -6,26 +6,31 @@ import type {
   QuizResult,
   CertificateResource,
   UserProfile,
+  ModuleProgressEntry,
+  ProgressOverview,
+  QuizAttemptHistory,
 } from "../contracts";
 import type { ApiClient } from "./api-client";
 import { HttpApiClient } from "./http-api-client";
-import { MockApiClient } from "./mock-api-client";
 
 /**
- * Phase 4 hybrid adapter.
+ * Hybrid adapter, Phase 5: EVERY application flow now runs live.
  *
- * Migrated flows (tracks, modules, quiz retrieval) are served exclusively by
- * the real DB-backed HTTP API. User-scoped flows (profile, quiz grading,
- * progress/reset) stay on the Phase 2 mock stack until their phase ships;
- * certificates remain a static frontend resource by design.
+ *  - Learning content (tracks/modules/questions) streams from the real
+ *    DB-backed API (Phase 4).
+ *  - User-scoped flows (profile, progress, quiz grading, attempt history,
+ *    reset) are served by the authenticated /me endpoints (Phase 5): identity
+ *    comes from the browser session cookie forwarded by the BFF, grading is
+ *    computed by the server, and the answer keys never ship.
+ *  - Certificates remain a frontend-curated static resource by design.
  *
- * NO FALLBACK: every migrated call is delegated straight to the HTTP client.
- * If a real request fails, the error propagates to the caller — the mock
- * layer is never consulted as a silent substitute.
+ * NO FALLBACK: every call goes straight to the HTTP client; failures
+ * propagate to the caller — the mock layer is never a silent substitute.
+ * (Mock mode remains available only as a separate build via the Phase-3
+ * flag while it keeps working for UI-only development.)
  */
 export class HybridApiClient implements ApiClient {
   private readonly http = new HttpApiClient();
-  private readonly mock = new MockApiClient();
 
   getTracks(): Promise<Track[]> {
     return this.http.getTracks();
@@ -43,25 +48,34 @@ export class HybridApiClient implements ApiClient {
     return this.http.getQuizQuestions(trackSlug, moduleSlug);
   }
 
-  // --- Phase-boundary flows (mock until Phase 5) --------------------------
+  // --- Authenticated user flows (Phase 5) ---------------------------------
 
   getUserProfile(): Promise<UserProfile> {
-    return this.mock.getUserProfile();
+    return this.http.getUserProfile();
   }
 
-  updateUserProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    return this.mock.updateUserProfile(updates);
+  startModule(moduleId: string): Promise<ModuleProgressEntry> {
+    return this.http.startModule(moduleId);
+  }
+
+  getProgressOverview(): Promise<ProgressOverview> {
+    return this.http.getProgressOverview();
   }
 
   submitQuiz(submission: QuizSubmission): Promise<QuizResult> {
-    return this.mock.submitQuiz(submission);
+    return this.http.submitQuiz(submission);
   }
 
-  getCertificates(): Promise<CertificateResource[]> {
-    return this.mock.getCertificates();
+  getAttemptHistory(options?: { moduleId?: string; limit?: number }): Promise<QuizAttemptHistory> {
+    return this.http.getAttemptHistory(options);
   }
 
   resetProgress(): Promise<UserProfile> {
-    return this.mock.resetProgress();
+    return this.http.resetProgress();
+  }
+
+  getCertificates(): Promise<CertificateResource[]> {
+    // Static curated resource (by design) — no HTTP round-trip.
+    return this.http.getCertificates();
   }
 }

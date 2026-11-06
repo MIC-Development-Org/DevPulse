@@ -18,6 +18,7 @@ import {
 import { useTheme } from "next-themes";
 import { useToast } from "../ui/toast";
 import { api } from "@/lib/api/api-client";
+import { resetXP } from "@/lib/gamification/xp";
 import type { Track } from "@/lib/contracts";
 
 interface CommandPaletteProps {
@@ -238,19 +239,29 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               <Command.Item
                 onSelect={() =>
                   handleSelect(async () => {
-                    await api.resetProgress();
-                    showToast({
-                      title: "Progress Reset",
-                      description: "Your mock learning progress has been restored to default seed state.",
-                      type: "success",
-                    });
-                    router.refresh();
+                    try {
+                      await api.resetProgress();
+                      // D5: XP stays client-side; resetting includes it.
+                      resetXP();
+                      showToast({
+                        title: "Progress Reset",
+                        description: "Server progress and local XP have been cleared.",
+                        type: "success",
+                      });
+                      router.refresh();
+                    } catch {
+                      showToast({
+                        title: "Reset failed",
+                        description: "The progress reset could not be completed. Please try again.",
+                        type: "error",
+                      });
+                    }
                   })
                 }
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
               >
                 <RotateCcw className="w-4 h-4 text-rose-500" />
-                <span>Reset Local Progress State</span>
+                <span>Reset Progress</span>
               </Command.Item>
             </Command.Group>
           </Command.List>

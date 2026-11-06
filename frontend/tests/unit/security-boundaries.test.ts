@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -162,15 +162,18 @@ describe("mock visibility", () => {
   });
 });
 
-describe("dead-route gates and real business proxies (Phase 4 topology)", () => {
-  const gates = [
+describe("dead-route gates and real business proxies (Phase 5 topology)", () => {
+  const retiredGates = [
     path.join("src", "app", "api", "quiz", "submit", "route.ts"),
-    path.join("src", "app", "api", "certificates", "route.ts"),
     path.join("src", "app", "api", "user", "profile", "route.ts"),
   ];
 
-  it.each(gates)("%s keeps the 501 dead-route gate", (route) => {
-    const source = readFileSync(path.join(S, route), "utf8");
+  it.each(retiredGates)("%s is gone (Phase 5 D7 retirement, anti-resurrection)", (route) => {
+    expect(existsSync(path.join(S, route))).toBe(false);
+  });
+
+  it("the certificates gate remains the only 501 dead-route", () => {
+    const source = repoSource("src", "app", "api", "certificates", "route.ts");
     expect(source).toContain("businessRouteNotImplemented");
     expect(source).toContain("notImplementedResponse");
   });
@@ -199,6 +202,46 @@ describe("dead-route gates and real business proxies (Phase 4 topology)", () => 
     expect(source).toContain("jsonBackendResponse");
   });
 
+  // --- Phase 5: every /me + grading proxy is session-gated server-side ----
+
+  const authedRoutes = [
+    path.join("src", "app", "api", "business", "me", "profile", "route.ts"),
+    path.join("src", "app", "api", "business", "me", "progress", "route.ts"),
+    path.join(
+      "src", "app", "api", "business", "me", "progress", "[moduleId]", "start", "route.ts"
+    ),
+    path.join("src", "app", "api", "business", "me", "progress", "reset", "route.ts"),
+    path.join("src", "app", "api", "business", "quiz", "submissions", "route.ts"),
+    path.join("src", "app", "api", "business", "me", "quiz", "attempts", "route.ts"),
+  ];
+
+  it.each(authedRoutes)("%s requires a browser session before proxying (Phase 5)", (route) => {
+    const source = readFileSync(path.join(S, route), "utf8");
+    expect(source).toContain("requireSessionToken");
+    expect(source).toContain("authedBackendFetch");
+  });
+
+  it("the submissions proxy re-validates the grading inbox with the shared contract", () => {
+    const source = repoSource("src", "app", "api", "business", "quiz", "submissions", "route.ts");
+    expect(source).toContain("QuizSubmissionSchema");
+    expect(source).toContain("QuizResultSchema");
+  });
+
+  it("the start proxy rejects malformed module ids before the backend hop", () => {
+    const source = repoSource(
+      "src", "app", "api", "business", "me", "progress", "[moduleId]", "start", "route.ts"
+    );
+    expect(source).toContain("MODULE_ID_PATTERN");
+  });
+
+  it("the attempts proxy bounds the page size before the backend hop", () => {
+    const source = repoSource(
+      "src", "app", "api", "business", "me", "quiz", "attempts", "route.ts"
+    );
+    expect(source).toContain("AttemptsQuerySchema");
+    expect(source).toContain(".max(50)");
+  });
+
   it("the quiz proxy re-validates the browser-safe public contract", () => {
     const source = repoSource(
       "src", "app", "api", "business", "tracks", "[slug]", "modules", "[moduleSlug]", "quiz", "route.ts"
@@ -211,5 +254,104 @@ describe("dead-route gates and real business proxies (Phase 4 topology)", () => 
     expect(source).toContain("computeMockSelection");
     // Route handlers participate in the hard production guard too.
     expect(source).toContain('import "./guard.server"');
+  });
+});
+
+describe("phase 5 answer-key de-bundling invariants (D6)", () => {
+  it("adapter.ts inlines the mock flag so builds can constant-fold the branch", () => {
+    const source = repoSource("src", "lib", "api", "adapter.ts");
+    expect(stripComments(source)).toContain('process.env.NEXT_PUBLIC_API_MOCK !== "false"');
+    // Every mock instantiation must sit behind the FOLDED flag only — any
+    // compiler-reachable new MockApiClient keeps the bank in the bundle.
+    expect(stripComments(source)).not.toContain("?? new MockApiClient");
+    const instantiations =
+      stripComments(source).match(/new MockApiClient\(\)/g)?.length ?? 0;
+    expect(instantiations).toBe(1); // exactly the folded ternary arm
+  });
+
+  it("hybrid-api-client no longer references the mock stack at all", () => {
+    const source = repoSource("src", "lib", "api", "hybrid-api-client.ts");
+    expect(stripComments(source)).not.toMatch(/mock/i);
+  });
+
+  it("mock-data never re-exports the quiz banks (answer keys)", () => {
+    const source = repoSource("src", "lib", "data", "mock-data.ts");
+    expect(stripComments(source)).not.toContain("QUIZ_BANKS");
+  });
+
+  it("QUIZ_BANKS is importable only by the mock adapter clientside", () => {
+    const offenders = new Map<string, string>();
+    const root = path.join(S);
+    const allowed = new Set(["mock-api-client.ts"]);
+
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = path.join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          walk(full);
+        } else if (full.endsWith(".ts") || full.endsWith(".tsx")) {
+          const content = readFileSync(full, "utf8");
+          if (stripComments(content).includes("QUIZ_BANKS")) {
+            const rel = path.relative(root, full).replaceAll("\\", "/");
+            offenders.set(rel, content);
+          }
+        }
+      }
+    };
+    walk(path.join(root, "src"));
+
+    // Tests explicitly drive the de-bundling plane; src must stay clean.
+    for (const [file] of offenders) {
+      expect(allowed.has(file.split("/").pop() ?? file)).toBe(true);
+    }
+    // And the mock adapter reads the keys from the source package.
+    const mockSource = offenders.get("src/lib/api/mock-api-client.ts");
+    expect(mockSource).toContain('@devpulse/curriculum');
+  });
+
+  it("client modules import the browser-safe contracts surface, never the server barrel (D6)", () => {
+    // Structural guarantee: `@devpulse/contracts` (the barrel) re-combines the
+    // authored bank schema; client code must reach the shared package only
+    // through `@devpulse/contracts/src/shared-schemas` (which excludes grading
+    // truth — see shared-schemas.ts). Server-only planes (RSC pages, BFF
+    // routes, lib/bff) may keep using the barrel; client planes may not.
+    const offenders: string[] = [];
+    const root = path.join(S);
+    const clientRoots = ["src/lib/api", "src/components", "src/lib/profile"];
+    const banned = /from\s+"@devpulse\/contracts";/;
+
+    for (const sub of clientRoots) {
+      const walk = (dir: string) => {
+        for (const entry of readdirSync(dir)) {
+          const full = path.join(dir, entry);
+          if (statSync(full).isDirectory()) {
+            walk(full);
+          } else if (full.endsWith(".ts") || full.endsWith(".tsx")) {
+            if (banned.test(stripComments(readFileSync(full, "utf8")))) {
+              offenders.push(path.relative(root, full).replaceAll("\\", "/"));
+            }
+          }
+        }
+      };
+      walk(path.join(root, sub));
+    }
+    expect(offenders).toEqual([]);
+
+    // And the two graded-truth-adjacent client planes use the deep surface.
+    expect(stripComments(repoSource("src", "lib", "api", "http-api-client.ts"))).toContain(
+      "@devpulse/contracts/src/shared-schemas"
+    );
+    expect(stripComments(repoSource("src", "lib", "api", "errors.ts"))).toContain(
+      "@devpulse/contracts/src/shared-schemas"
+    );
+    // While the bank schema itself stays server-only in the package layout
+    // (the workspace-parent package, resolved relative to the frontend cwd).
+    const contractsSrc = path.resolve(process.cwd(), "..", "shared", "contracts", "src");
+    expect(stripComments(readFileSync(path.join(contractsSrc, "index.ts"), "utf8"))).toContain(
+      "correctOptionIndex"
+    );
+    expect(
+      stripComments(readFileSync(path.join(contractsSrc, "shared-schemas.ts"), "utf8"))
+    ).not.toContain("correctOptionIndex");
   });
 });

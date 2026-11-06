@@ -11,7 +11,12 @@ export const QUIZ_CONFIG: QuizConfig = {
 
 export { TRACKS } from "@devpulse/curriculum";
 
-export { QUIZ_BANKS } from "@devpulse/curriculum";
+// SECURITY (Phase 5 / D6): QUIZ_BANKS is NO LONGER re-exported here. The
+// answer keys live only in @devpulse/curriculum and must be importable ONLY
+// by the mock adapter (excluded from production hybrid bundles by build-time
+// dead-code elimination, verified by scripts/check-production-bundle.mjs).
+// Anything importing mock-data (certificates, contracts tests, storybook)
+// must never pull the keys in transitively.
 
 export const CERTIFICATES: CertificateResource[] = [
   {

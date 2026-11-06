@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api/api-client";
+import { ApiError } from "@/lib/api/errors";
 import { UserProfile, Track } from "@/lib/contracts";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -30,6 +31,7 @@ import {
   TrendingUp,
   Trophy,
   Target,
+  LogIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -134,6 +136,10 @@ export default function DashboardPage() {
   const [user, setUser] = React.useState<UserProfile | null>(null);
   const [tracks, setTracks] = React.useState<Track[]>([]);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  // Phase 5 decision D1: unauthenticated users get an honest sign-in panel —
+  // NEVER the mock user's progress and never an eternal spinner.
+  const [signedOut, setSignedOut] = React.useState<boolean>(false);
+  const [loadFailed, setLoadFailed] = React.useState<boolean>(false);
   const [calendarReady, setCalendarReady] = React.useState<boolean>(false);
   const [xpState, setXpState] = React.useState<XPState | null>(null);
   const [missionsDone, setMissionsDone] = React.useState<Record<string, boolean>>(
@@ -149,22 +155,89 @@ export default function DashboardPage() {
         ]);
         setUser(userData);
         setTracks(tracksData);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          setSignedOut(true);
+        } else {
+          setLoadFailed(true);
+        }
       } finally {
         setIsLoading(false);
       }
     }
     loadData();
     setXpState(readXPState());
-    // Calendar dates depend on "today" — render after hydration to avoid
+    // Calendar dates depend on "today" - render after hydration to avoid
     // server/client date-time mismatches
     setCalendarReady(true);
   }, []);
 
-  if (isLoading || !user) {
+  if (isLoading || (!user && !signedOut && !loadFailed)) {
     return (
       <div className="max-w-7xl mx-auto py-24 px-4 flex flex-col items-center gap-4">
         <div className="w-10 h-10 border-2 border-mint border-t-transparent rounded-full animate-spin" />
         <p className="text-sm text-foreground/50 font-mono">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    // Unreachable state (signedOut/loadFailed panels render above); kept for
+    // exhaustive narrowing so the dashboard body can rely on `user`.
+    return null;
+  }
+
+  if (signedOut) {
+    return (
+      <div className="max-w-md mx-auto py-24 px-4">
+        <Card className="text-center">
+          <CardContent className="pt-8 pb-6 space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-2xl border border-mint/40 bg-mint/10 flex items-center justify-center">
+              <LogIn className="w-5 h-5 text-mint" />
+            </div>
+            <h1 className="font-display text-xl font-bold text-foreground">
+              Sign in to view your progress
+            </h1>
+            <p className="text-sm text-foreground/60 leading-relaxed">
+              Your dashboard shows real, per-user progress — streaks, quiz scores
+              and unlock states from your own learning history. Guests have no
+              progress to show yet.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <Link href="/login">
+                <Button variant="primary" size="sm">
+                  <LogIn className="w-4 h-4 mr-1.5" /> Sign In
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button variant="ghost" size="sm">
+                  Create Account
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
+        <Card>
+          <CardContent className="pt-8 pb-6 space-y-4">
+            <h1 className="font-display text-lg font-bold text-foreground">
+              The dashboard could not be loaded
+            </h1>
+            <p className="text-sm text-foreground/60">
+              Live data is unreachable right now. No fallback data is shown
+              by design — please retry.
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

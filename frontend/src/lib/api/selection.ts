@@ -27,8 +27,10 @@ export interface MockSelection {
 }
 
 /**
- * Adapter mode names (Phase 4). "hybrid" means the live DB-backed API serves
- * tracks/modules/quiz while user-scoped flows remain mock (until Phase 5).
+ * Adapter mode names (Phase 4 naming kept for UI honesty surfaces). Since
+ * Phase 5, "hybrid" means EVERYTHING is live: the DB-backed API serves
+ * tracks/modules/quiz AND the authenticated user flows (profile, progress,
+ * server-side grading, attempts, reset) — no mock phase boundary remains.
  */
 export type ApiMode = "mock" | "hybrid";
 
